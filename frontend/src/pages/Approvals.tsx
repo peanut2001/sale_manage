@@ -1,7 +1,6 @@
 import { Button, Card, Table } from 'antd'
 import { useNavigate } from 'react-router'
 import Async from '../components/Async'
-import PageHeader from '../components/PageHeader'
 import { useApi } from '../hooks'
 import type { Target } from '../types'
 import { pagination, targetUrl } from '../utils'
@@ -21,7 +20,6 @@ export default function Approvals() {
     <Async state={state}>
       {({ items }) => (
         <>
-          <PageHeader title={`待我审批 (${items.length})`} />
           <Card>
             <Table<Item> rowKey={(r) => r.type + r.id} dataSource={items} pagination={pagination}
               scroll={{ x: 'max-content' }} locale={{ emptyText: '没有待审批的报告' }}

@@ -1,9 +1,9 @@
 import { ReloadOutlined } from '@ant-design/icons'
-import { Alert, Button, Card, DatePicker, Table } from 'antd'
+import { Alert, Button, Card, DatePicker, Table, Tooltip } from 'antd'
 import dayjs from 'dayjs'
 import { Link, useNavigate, useSearchParams } from 'react-router'
 import { post } from '../../api'
-import PageHeader from '../../components/PageHeader'
+import FilterCard from '../../components/FilterCard'
 import { StatusTag } from '../../components/Tags'
 import { useAction, useApi } from '../../hooks'
 import { useAuth, useMe } from '../../session'
@@ -33,19 +33,20 @@ export default function MonthlyList() {
 
   return (
     <>
-      <PageHeader title={`月度出差报告${d ? ` · ${d.month}` : ''}`}
-        sub="每个自然月结束后, 系统自动为所有销售员生成上月报告 (统计 + 分析)。月中也可手动生成当月预览; 已提交或已审批的报告不会被覆盖。"
-        extra={d && (
+      {state.error && <Alert type="error" showIcon title={state.error.message} className="mb16" />}
+      <FilterCard total={d && rows.length} unit="份"
+        toolbar={d && (
           <>
             <DatePicker picker="month" allowClear={false} value={dayjs(d.month)}
               disabledDate={(m) => m.format('YYYY-MM') > d.current}
               onChange={(m) => m && setSp({ month: m.format('YYYY-MM') })} />
-            <Button icon={<ReloadOutlined />} loading={loading} onClick={generate}>
-              {isManager ? '为团队' : ''}生成 / 刷新 {d.month} 报告
-            </Button>
+            <Tooltip title="月中可生成当月预览；已提交或已审批的报告不会被覆盖">
+              <Button type="primary" icon={<ReloadOutlined />} loading={loading} onClick={generate}>
+                {isManager ? '为团队' : ''}生成 / 刷新报告
+              </Button>
+            </Tooltip>
           </>
         )} />
-      {state.error && <Alert type="error" showIcon title={state.error.message} className="mb16" />}
       <Card className="mb16">
         <Table<MonthlyBrief> rowKey="id" loading={state.loading} dataSource={rows} pagination={false}
           scroll={{ x: 'max-content' }} locale={{ emptyText: '该月报告尚未生成' }}
@@ -55,7 +56,7 @@ export default function MonthlyList() {
             { title: '客户', dataIndex: 'customer_count', align: 'right' },
             { title: '新客户', dataIndex: 'new_customers', align: 'right' },
             { title: '出差天数', dataIndex: 'trip_days', align: 'right' },
-            { title: '差旅费 (元)', dataIndex: 'cost_total', align: 'right', render: money },
+            { title: '差旅费（元）', dataIndex: 'cost_total', align: 'right', render: money },
             { title: '单次拜访成本', dataIndex: 'cost_per_visit', align: 'right', render: money },
             { title: 'A 类覆盖', key: 'a', align: 'right', render: (_, r) => (r.owned_a ? `${r.a_covered}/${r.owned_a}` : '-') },
             { title: '状态', dataIndex: 'status', render: (s) => <StatusTag status={s} /> },

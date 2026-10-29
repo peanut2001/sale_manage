@@ -1,5 +1,5 @@
 import { PrinterOutlined } from '@ant-design/icons'
-import { App, Button, Card, Col, Empty, Input, Row, Table } from 'antd'
+import { App, Button, Card, Col, Empty, Input, Row, Space, Table } from 'antd'
 import { useState } from 'react'
 import { Link, useParams } from 'react-router'
 import { post } from '../../api'
@@ -7,7 +7,6 @@ import ApprovalPanel from '../../components/ApprovalPanel'
 import Async from '../../components/Async'
 import Bars from '../../components/Bars'
 import Kpi from '../../components/Kpi'
-import PageHeader from '../../components/PageHeader'
 import Prose from '../../components/Prose'
 import { StatusTag } from '../../components/Tags'
 import { useAction, useApi } from '../../hooks'
@@ -38,18 +37,24 @@ function MonthlyBody({ data: d, reload }: { data: Data; reload: () => void }) {
 
   return (
     <div className="stack">
-      <PageHeader title={<>{m.sales} · {m.month} 月度出差报告 <StatusTag status={m.status} /></>}
-        sub={`生成时间 ${m.generated_at}${m.region ? ` · ${m.region}` : ''}`}
-        extra={<Button icon={<PrinterOutlined />} onClick={() => window.print()}>打印 / 导出 PDF</Button>} />
-
-      <div className="kpis">
-        <Kpi label="拜访次数" value={s.visit_count} sub={`上月 ${s.prev_visits}`} />
-        <Kpi label="覆盖客户 / 新客户" value={`${s.customer_count} / ${s.new_customers.length}`} />
-        <Kpi label="出差次数 / 天数" value={`${s.trip_count} / ${s.trip_days}`} />
-        <Kpi label="差旅费用 (元)" value={money(s.cost_total)} sub={`上月 ${money(s.prev_cost)}`} />
-        <Kpi label="单次拜访成本 (元)" value={money(s.cost_per_visit)} />
-        <Kpi label="周报提交" value={`${s.weekly_done} / ${s.weeks}`} />
-      </div>
+      <Card
+        title={
+          <Space size={10} wrap>
+            <span>{m.sales} · {m.month} 月度报告</span>
+            <StatusTag status={m.status} />
+            <span className="hint">生成时间 {m.generated_at}{m.region && ` · ${m.region}`}</span>
+          </Space>
+        }
+        extra={<Button icon={<PrinterOutlined />} className="no-print" onClick={() => window.print()}>打印 / 导出 PDF</Button>}>
+        <div className="kpis card-kpis">
+          <Kpi label="拜访次数" value={s.visit_count} sub={`上月 ${s.prev_visits}`} />
+          <Kpi label="覆盖客户 / 新客户" value={`${s.customer_count} / ${s.new_customers.length}`} />
+          <Kpi label="出差次数 / 天数" value={`${s.trip_count} / ${s.trip_days}`} />
+          <Kpi label="差旅费用（元）" value={money(s.cost_total)} sub={`上月 ${money(s.prev_cost)}`} />
+          <Kpi label="单次拜访成本（元）" value={money(s.cost_per_visit)} />
+          <Kpi label="周报提交" value={`${s.weekly_done} / ${s.weeks}`} />
+        </div>
+      </Card>
 
       <Card title="系统分析">
         <ul className="analysis">{m.analysis.split('\n').map((line) => <li key={line}>{line}</li>)}</ul>
@@ -87,7 +92,7 @@ function MonthlyBody({ data: d, reload }: { data: Data; reload: () => void }) {
             { title: '日期', key: 'date', render: (_, t) => <Link to={`/trips/${t.id}`}>{t.start} ~ {t.end}</Link> },
             { title: '地点', dataIndex: 'destination' },
             { title: '本月天数', dataIndex: 'days', align: 'right' },
-            { title: '费用 (元)', dataIndex: 'cost', align: 'right', render: money },
+            { title: '费用（元）', dataIndex: 'cost', align: 'right', render: money },
             { title: '状态', dataIndex: 'status', render: (v) => <StatusTag status={v} /> },
           ]} />
         {s.trips.length > 0 && (
@@ -99,10 +104,10 @@ function MonthlyBody({ data: d, reload }: { data: Data; reload: () => void }) {
 
       {(s.a_missed.length > 0 || s.stale.length > 0) && (
         <Card title="需关注客户">
-          {s.a_missed.length > 0 && <p><strong>本月未拜访的 A 类客户: </strong>{s.a_missed.join('、')}</p>}
+          {s.a_missed.length > 0 && <p><strong>本月未拜访的 A 类客户：</strong>{s.a_missed.join('、')}</p>}
           {s.stale.length > 0 && (
-            <p><strong>超过 60 天未拜访: </strong>
-              {s.stale.map((c) => `${c.name} (${c.level}类, ${c.last || '从未拜访'})`).join('、')}</p>
+            <p><strong>超过 60 天未拜访：</strong>
+              {s.stale.map((c) => `${c.name}（${c.level} 类，${c.last || '从未拜访'}）`).join('、')}</p>
           )}
         </Card>
       )}
@@ -129,13 +134,13 @@ function MonthlyBody({ data: d, reload }: { data: Data; reload: () => void }) {
               <Button loading={loading} onClick={() => act('save')}>保存</Button>
               <Button loading={loading} onClick={() => act('refresh')}>刷新统计数据</Button>
               <Button type="primary" loading={loading}
-                onClick={() => modal.confirm({ title: '提交审批', content: '提交后不能修改, 确定提交审批?', onOk: () => act('submit') })}>
+                onClick={() => modal.confirm({ title: '提交审批', content: '提交后不能修改，确定提交审批？', onOk: () => act('submit') })}>
                 提交审批
               </Button>
             </div>
           </div>
         ) : (
-          <Prose text={m.self_summary} empty="(未填写)" />
+          <Prose text={m.self_summary} empty="（未填写）" />
         )}
       </Card>
       <ApprovalPanel target="monthly" id={m.id} info={d} onDone={reload} />

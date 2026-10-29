@@ -36,12 +36,12 @@ export async function api<T>(url: string, method = 'GET', body?: Body): Promise<
       body: body instanceof FormData ? body : body && JSON.stringify(body),
     })
   } catch {
-    throw new ApiError('网络连接失败, 请检查网络后重试', 0, {})
+    throw new ApiError('网络连接失败，请检查网络后重试', 0, {})
   }
   const data = res.headers.get('Content-Type')?.includes('json') ? await res.json() : {}
   if (!res.ok) {
     if (res.status === 401 || data.code === 'must_change_pw') onAuthLost()
-    throw new ApiError(data.error || `请求失败 (${res.status})`, res.status, data)
+    throw new ApiError(data.error || `请求失败（${res.status}）`, res.status, data)
   }
   return data as T
 }

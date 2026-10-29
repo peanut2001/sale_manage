@@ -55,7 +55,7 @@ export default function ApprovalPanel({ target, id, info, onDone }: {
       {info.can_comment && (
         <div className="approve-form no-print">
           <Input.TextArea rows={3} value={comment} onChange={(e) => setComment(e.target.value)}
-            placeholder="填写审批意见或工作指导 (退回时必填)" />
+            placeholder="填写审批意见或工作指导（退回时必填）" />
           <Space wrap>
             {info.can_approve && (
               <>

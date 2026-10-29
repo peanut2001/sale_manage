@@ -1,18 +1,20 @@
-import { Button, Card, Descriptions, Popconfirm } from 'antd'
+import { Button, Card, Descriptions, Popconfirm, Space } from 'antd'
+import { useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
 import { del } from '../../api'
 import Async from '../../components/Async'
-import PageHeader from '../../components/PageHeader'
 import Prose from '../../components/Prose'
 import { LevelTag } from '../../components/Tags'
 import { useAction, useApi } from '../../hooks'
 import type { Result, Visit } from '../../types'
+import VisitFormModal from './VisitFormModal'
 
 export default function VisitDetail() {
   const { id } = useParams()
   const navigate = useNavigate()
   const state = useApi<{ visit: Visit; editable: boolean }>(`/api/visits/${id}`)
   const [run, loading] = useAction()
+  const [open, setOpen] = useState(false)
 
   const remove = async () => {
     if (await run(() => del<Result>(`/api/visits/${id}`))) navigate('/visits')
@@ -22,16 +24,15 @@ export default function VisitDetail() {
     <Async state={state}>
       {({ visit: v, editable }) => (
         <>
-          <PageHeader title="拜访详情"
+          <Card title="拜访信息"
             extra={editable && (
-              <>
-                <Button onClick={() => navigate(`/visits/${v.id}/edit`)}>修改</Button>
-                <Popconfirm title="确定删除这条拜访记录?" onConfirm={remove}>
+              <Space>
+                <Button onClick={() => setOpen(true)}>修改</Button>
+                <Popconfirm title="确定删除这条拜访记录？" onConfirm={remove}>
                   <Button danger loading={loading}>删除</Button>
                 </Popconfirm>
-              </>
-            )} />
-          <Card>
+              </Space>
+            )}>
             <Descriptions column={1} styles={{ label: { width: 110 } }}
               items={[
                 { label: '客户', children: <><LevelTag level={v.level} /><Link to={`/customers/${v.customer_id}`}>{v.customer}</Link></> },
@@ -44,10 +45,11 @@ export default function VisitDetail() {
                 { label: '洽谈内容', children: <Prose text={v.content} /> },
                 { label: '拜访成果', children: <Prose text={v.result} /> },
                 { label: '商机阶段', children: `${v.stage || '-'}${v.amount ? ` · 预计 ${v.amount} 万元` : ''}` },
-                { label: '下一步', children: `${v.next_step || '-'}${v.next_date ? ` (${v.next_date})` : ''}` },
+                { label: '下一步', children: `${v.next_step || '-'}${v.next_date ? `（${v.next_date}）` : ''}` },
                 { label: '录入时间', children: <span className="hint">{v.created_at}</span> },
               ]} />
           </Card>
+          <VisitFormModal open={open} id={v.id} onClose={() => setOpen(false)} onSaved={state.reload} />
         </>
       )}
     </Async>

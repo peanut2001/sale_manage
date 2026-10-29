@@ -87,8 +87,8 @@ export default function Login() {
                 <Checkbox>记住我</Checkbox>
               </Form.Item>
               <Popover trigger="click" placement="topRight"
-                content="请联系系统管理员在「账号管理」中重置密码, 重置后首次登录需修改密码">
-                <a role="button" tabIndex={0}>忘记密码?</a>
+                content="请联系系统管理员在「账号管理」中重置密码，重置后首次登录需修改密码">
+                <a role="button" tabIndex={0}>忘记密码？</a>
               </Popover>
             </div>
             <Button type="primary" htmlType="submit" block loading={loading} className="login-btn">

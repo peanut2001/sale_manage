@@ -1,7 +1,6 @@
 import { Alert, Button, Card, Form, Input } from 'antd'
 import { useNavigate } from 'react-router'
 import { post } from '../api'
-import PageHeader from '../components/PageHeader'
 import { useAction } from '../hooks'
 import { useAuth, useMe } from '../session'
 import type { Result } from '../types'
@@ -27,17 +26,16 @@ export default function Password() {
 
   return (
     <>
-      <PageHeader title="修改密码" />
       <Card style={{ maxWidth: 480 }}>
         {!!me.must_change_pw && (
-          <Alert type="warning" showIcon title="首次登录或密码被重置, 请先修改密码"
+          <Alert type="warning" showIcon title="首次登录或密码被重置，请先修改密码"
             description="修改完成后才能使用其他功能" style={{ marginBottom: 20 }} />
         )}
         <Form<PasswordForm> layout="vertical" onFinish={submit} requiredMark={false}>
           <Form.Item label="原密码" name="old" rules={[{ required: true, message: '请输入原密码' }]}>
             <Input.Password autoComplete="current-password" />
           </Form.Item>
-          <Form.Item label="新密码" name="new" extra="至少 8 位, 同时包含字母和数字"
+          <Form.Item label="新密码" name="new" extra="至少 8 位，同时包含字母和数字"
             rules={[
               { required: true, message: '请输入新密码' },
               { min: 8, message: '新密码至少 8 位' },

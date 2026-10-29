@@ -1,8 +1,9 @@
 import { PlusOutlined } from '@ant-design/icons'
 import { Alert, Button, Card, DatePicker, Form, Select, Table } from 'antd'
+import { useState } from 'react'
 import { Link, useNavigate } from 'react-router'
 import FilterCard, { FCol } from '../../components/FilterCard'
-import PageHeader from '../../components/PageHeader'
+import TripFormModal from './TripFormModal'
 import { StatusTag } from '../../components/Tags'
 import { useApi, useFilters, useOptions } from '../../hooks'
 import { useAuth, useMe } from '../../session'
@@ -15,13 +16,13 @@ export default function TripList() {
   const navigate = useNavigate()
   const opts = useOptions()
   const filters = useFilters({ months: ['month'] })
+  const [open, setOpen] = useState(false)
   const state = useApi<{ rows: Trip[] }>(`/api/trips?${filters.query}`)
 
   return (
     <>
-      <PageHeader title="出差报告"
-        extra={<Button type="primary" icon={<PlusOutlined />} onClick={() => navigate('/trips/new')}>新建出差报告</Button>} />
-      <FilterCard filters={filters}>
+      <FilterCard filters={filters} total={state.data?.rows.length}
+        toolbar={<Button type="primary" icon={<PlusOutlined />} onClick={() => setOpen(true)}>新建出差报告</Button>}>
         <FCol><Form.Item label="月份" name="month"><DatePicker picker="month" /></Form.Item></FCol>
         {isManager && (
           <FCol><Form.Item label="销售员" name="user_id">
@@ -43,10 +44,12 @@ export default function TripList() {
             { title: '销售员', dataIndex: 'sales' },
             { title: '天数', dataIndex: 'days', align: 'right' },
             { title: '拜访', dataIndex: 'nvisits', align: 'right' },
-            { title: '费用 (元)', key: 'cost', align: 'right', render: (_, t) => money(tripCost(t)) },
+            { title: '费用（元）', key: 'cost', align: 'right', render: (_, t) => money(tripCost(t)) },
             { title: '状态', dataIndex: 'status', render: (s) => <StatusTag status={s} /> },
           ]} />
       </Card>
+      {/* 新建后进入详情页, 继续添加拜访记录 */}
+      <TripFormModal open={open} onClose={() => setOpen(false)} onSaved={(id) => navigate(`/trips/${id}`)} />
     </>
   )
 }

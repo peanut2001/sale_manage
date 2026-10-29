@@ -1,8 +1,9 @@
 import { PlusOutlined } from '@ant-design/icons'
 import { Alert, Button, Card, DatePicker, Form, Input, Select, Table } from 'antd'
-import { Link, useNavigate } from 'react-router'
+import { useState } from 'react'
+import { Link } from 'react-router'
 import FilterCard, { FCol } from '../../components/FilterCard'
-import PageHeader from '../../components/PageHeader'
+import VisitFormModal from './VisitFormModal'
 import { LevelTag } from '../../components/Tags'
 import { useApi, useFilters, useOptions } from '../../hooks'
 import { useAuth, useMe } from '../../session'
@@ -12,16 +13,15 @@ import { pagination, strOptions, toOptions } from '../../utils'
 export default function VisitList() {
   const { session } = useAuth()
   const { isManager } = useMe()
-  const navigate = useNavigate()
   const opts = useOptions()
   const filters = useFilters({ dates: ['start', 'end'] })
+  const [open, setOpen] = useState(false)
   const state = useApi<{ rows: Visit[] }>(`/api/visits?${filters.query}`)
 
   return (
     <>
-      <PageHeader title="客户拜访记录"
-        extra={<Button type="primary" icon={<PlusOutlined />} onClick={() => navigate('/visits/new')}>填写拜访记录</Button>} />
-      <FilterCard filters={filters}>
+      <FilterCard filters={filters} total={state.data?.rows.length}
+        toolbar={<Button type="primary" icon={<PlusOutlined />} onClick={() => setOpen(true)}>填写拜访记录</Button>}>
         <FCol><Form.Item label="开始日期" name="start"><DatePicker /></Form.Item></FCol>
         <FCol><Form.Item label="结束日期" name="end"><DatePicker /></Form.Item></FCol>
         {isManager && (
@@ -57,6 +57,7 @@ export default function VisitList() {
             },
           ]} />
       </Card>
+      <VisitFormModal open={open} onClose={() => setOpen(false)} onSaved={state.reload} />
     </>
   )
 }

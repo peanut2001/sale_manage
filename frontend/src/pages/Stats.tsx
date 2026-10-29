@@ -1,11 +1,10 @@
 import { DownloadOutlined } from '@ant-design/icons'
-import { Alert, Button, Card, Col, DatePicker, Form, Input, Row, Select, Table } from 'antd'
+import { Alert, Button, Card, Col, DatePicker, Form, Input, Row, Select, Table, Tooltip } from 'antd'
 import dayjs from 'dayjs'
 import { Link } from 'react-router'
 import { qs } from '../api'
 import Bars from '../components/Bars'
 import FilterCard, { FCol } from '../components/FilterCard'
-import PageHeader from '../components/PageHeader'
 import { LevelTag } from '../components/Tags'
 import { useApi, useFilters, useOptions } from '../hooks'
 import { useAuth, useMe } from '../session'
@@ -53,11 +52,12 @@ export default function Stats() {
 
   return (
     <>
-      <PageHeader title="统计分析"
-        extra={d && (
-          <Button type="primary" icon={<DownloadOutlined />} href={`/api/stats/export${qs(d.filters)}`}>导出 Excel</Button>
-        )} />
-      <FilterCard filters={filters} initial={{ start: today.startOf('month'), end: today, ...filters.initial }}>
+      <FilterCard filters={filters} initial={{ start: today.startOf('month'), end: today, ...filters.initial }}
+        toolbar={d && (
+          <Tooltip title="按当前筛选条件导出明细和汇总">
+            <Button type="primary" icon={<DownloadOutlined />} href={`/api/stats/export${qs(d.filters)}`}>导出 Excel</Button>
+          </Tooltip>
+        )}>
         <FCol><Form.Item label="开始日期" name="start"><DatePicker /></Form.Item></FCol>
         <FCol><Form.Item label="结束日期" name="end"><DatePicker /></Form.Item></FCol>
         {isManager && (
@@ -87,8 +87,8 @@ export default function Stats() {
               { title: '首次拜访', dataIndex: 'nfirst', align: 'right' },
               { title: '出差次数', dataIndex: 'trip_n', align: 'right' },
               { title: '出差天数', dataIndex: 'trip_days', align: 'right' },
-              { title: '差旅费 (元)', dataIndex: 'trip_cost', align: 'right', render: money },
-              { title: '商机 (万)', dataIndex: 'amount', align: 'right' },
+              { title: '差旅费（元）', dataIndex: 'trip_cost', align: 'right', render: money },
+              { title: '商机（万元）', dataIndex: 'amount', align: 'right' },
             ]} />
         </Card>
 
@@ -99,7 +99,7 @@ export default function Stats() {
             </Card>
           </Col>
           <Col xs={24} lg={14}>
-            <Card title="按客户 (前 100)" className="full-height">
+            <Card title="按客户（前 100）" className="full-height">
               <Table<CustomerRow> rowKey="id" loading={state.loading} dataSource={d?.by_customer} pagination={false}
                 size="small" scroll={{ x: 'max-content', y: 360 }} locale={{ emptyText: '无' }}
                 columns={[
@@ -113,7 +113,7 @@ export default function Stats() {
           </Col>
         </Row>
 
-        <Card title="拜访明细" extra={<span className="hint">最近 200 条, 完整数据请导出 Excel</span>}>
+        <Card title="拜访明细" extra={<span className="hint">最近 200 条，完整数据请导出 Excel</span>}>
           <Table<Visit> rowKey="id" loading={state.loading} dataSource={d?.detail} pagination={pagination}
             scroll={{ x: 'max-content' }} locale={{ emptyText: '无' }}
             columns={[

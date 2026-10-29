@@ -1,14 +1,14 @@
-import { AutoComplete, Button, Card, Col, DatePicker, Form, Input, InputNumber, Row, Select } from 'antd'
+import { AutoComplete, Button, Col, DatePicker, Form, Input, InputNumber, Row, Select } from 'antd'
 import dayjs from 'dayjs'
 import { useEffect, useRef, useState } from 'react'
-import { Link, useNavigate, useParams, useSearchParams } from 'react-router'
 import { api, post, put } from '../../api'
 import Async from '../../components/Async'
-import PageHeader from '../../components/PageHeader'
+import FormModal, { ModalActions } from '../../components/FormModal'
 import { useAction, useApi } from '../../hooks'
 import { useAuth } from '../../session'
 import type { Contact, CustomerOption, Result, Trip, Visit } from '../../types'
 import { deserialize, serialize, strOptions } from '../../utils'
+import CustomerFormModal from '../customers/CustomerFormModal'
 
 interface FormData {
   visit: Visit | null
@@ -16,24 +16,37 @@ interface FormData {
   trips: Trip[]
 }
 
-export default function VisitForm() {
-  const { id } = useParams()
-  const presetTrip = Number(useSearchParams()[0].get('trip_id')) || undefined
-  const state = useApi<FormData>(`/api/visits/form?id=${id ?? ''}`)
+interface Props {
+  open: boolean
+  id?: number // 修改时传入
+  tripId?: number // 从出差报告中添加时预选
+  onClose: () => void
+  onSaved: () => void
+}
+
+export default function VisitFormModal({ open, ...rest }: Props) {
   return (
-    <>
-      <PageHeader title={id ? '修改客户拜访记录' : '填写客户拜访记录'} />
-      <Async state={state}>{(d) => <VisitFormBody data={d} presetTrip={presetTrip} />}</Async>
-    </>
+    <FormModal open={open} title={rest.id ? '修改拜访记录' : '填写拜访记录'} width={880} onClose={rest.onClose}>
+      <VisitFormLoader {...rest} />
+    </FormModal>
   )
 }
 
-function VisitFormBody({ data, presetTrip }: { data: FormData; presetTrip?: number }) {
+function VisitFormLoader(props: Omit<Props, 'open'>) {
+  const state = useApi<FormData>(`/api/visits/form?id=${props.id ?? ''}`)
+  return (
+    <Async state={state} onBack={props.onClose}>
+      {(d) => <VisitFormBody data={d} reload={state.reload} {...props} />}
+    </Async>
+  )
+}
+
+function VisitFormBody({ data, reload, tripId, onClose, onSaved }: Omit<Props, 'open'> & { data: FormData; reload: () => void }) {
   const { session } = useAuth()
-  const navigate = useNavigate()
   const [form] = Form.useForm()
   const [run, loading] = useAction()
   const [loaded, setLoaded] = useState<{ cid?: number; list: Contact[] }>({ list: [] })
+  const [newCustomer, setNewCustomer] = useState(false)
   const again = useRef(false)
   const v = data.visit
   const customerId: number | undefined = Form.useWatch('customer_id', form)
@@ -43,7 +56,7 @@ function VisitFormBody({ data, presetTrip }: { data: FormData; presetTrip?: numb
     visit_date: dayjs(session.today),
     visit_type: '回访',
     stage: '',
-    trip_id: data.trips.some((t) => t.id === presetTrip) ? presetTrip : undefined,
+    trip_id: data.trips.some((t) => t.id === tripId) ? tripId : undefined,
   }
   const initial = v ? { ...deserialize(v, ['visit_date', 'next_date']), amount: v.amount || undefined } : defaults
 
@@ -68,22 +81,22 @@ function VisitFormBody({ data, presetTrip }: { data: FormData; presetTrip?: numb
     const body = serialize(values)
     const res = await run(() => (v ? put<Result>(`/api/visits/${v.id}`, body) : post<Result>('/api/visits', body)))
     if (!res) return
+    onSaved()
     if (again.current) {
       form.resetFields()
       form.setFieldsValue({ trip_id: body.trip_id || undefined })
-      window.scrollTo({ top: 0 })
     } else {
-      navigate(`/visits/${res.id}`)
+      onClose()
     }
   }
 
   return (
-    <Card className="form-card">
-      <Form form={form} layout="vertical" initialValues={initial} onFinish={submit}>
+    <>
+      <Form form={form} layout="vertical" initialValues={initial} onFinish={submit} className="form-card">
         <Row gutter={16}>
           <Col span={24}>
             <Form.Item label="客户" name="customer_id" rules={[{ required: true, message: '请从客户名单中选择客户' }]}
-              extra={<>名单中没有? <Link to="/customers/new" target="_blank">申请新增客户</Link> (主管审核后可选)</>}>
+              extra={<>名单中没有？<a role="button" onClick={() => setNewCustomer(true)}>申请新增客户</a>（主管审核后可选）</>}>
               <Select placeholder="输入关键字筛选客户名单…" showSearch={{ optionFilterProp: 'label' }}
                 options={data.customers.map((c) => ({ value: c.id, label: `[${c.level}] ${c.name}${c.region ? ` · ${c.region}` : ''}` }))} />
             </Form.Item>
@@ -100,7 +113,7 @@ function VisitFormBody({ data, presetTrip }: { data: FormData; presetTrip?: numb
           </Col>
           <Col xs={24} md={16}>
             <Form.Item label="所属出差行程" name="trip_id">
-              <Select allowClear placeholder="非出差 (本地拜访)"
+              <Select allowClear placeholder="非出差（本地拜访）"
                 options={data.trips.map((t) => ({ value: t.id, label: `${t.start_date} ~ ${t.end_date} ${t.destination}` }))} />
             </Form.Item>
           </Col>
@@ -115,7 +128,7 @@ function VisitFormBody({ data, presetTrip }: { data: FormData; presetTrip?: numb
           <Col xs={12} md={8}><Form.Item label="职务" name="contact_title"><Input /></Form.Item></Col>
           <Col xs={12} md={8}><Form.Item label="联系电话" name="contact_phone"><Input /></Form.Item></Col>
           <Col span={24}>
-            <Form.Item label="其他参与人员" name="attendees"><Input placeholder="客户方/我方其他人员, 用逗号分隔" /></Form.Item>
+            <Form.Item label="其他参与人员" name="attendees"><Input placeholder="客户方/我方其他人员，用逗号分隔" /></Form.Item>
           </Col>
 
           <Col span={24}>
@@ -130,18 +143,20 @@ function VisitFormBody({ data, presetTrip }: { data: FormData; presetTrip?: numb
             </Form.Item>
           </Col>
           <Col xs={12} md={6}><Form.Item label="商机阶段" name="stage"><Select options={strOptions(session.stages)} /></Form.Item></Col>
-          <Col xs={12} md={6}><Form.Item label="预计商机金额 (万元)" name="amount"><InputNumber min={0} step={0.01} /></Form.Item></Col>
+          <Col xs={12} md={6}><Form.Item label="预计商机金额（万元）" name="amount"><InputNumber min={0} step={0.01} /></Form.Item></Col>
           <Col xs={24} md={6}><Form.Item label="下一步计划" name="next_step"><Input /></Form.Item></Col>
           <Col xs={24} md={6}><Form.Item label="下次跟进日期" name="next_date"><DatePicker /></Form.Item></Col>
         </Row>
-        <div className="form-actions">
-          <Button type="primary" htmlType="submit" loading={loading} onClick={() => (again.current = false)}>保存</Button>
+        <ModalActions>
+          <Button onClick={onClose}>取消</Button>
           {!v && (
             <Button htmlType="submit" loading={loading} onClick={() => (again.current = true)}>保存并继续填写下一条</Button>
           )}
-          <Button onClick={() => navigate(-1)}>取消</Button>
-        </div>
+          <Button type="primary" htmlType="submit" loading={loading} onClick={() => (again.current = false)}>保存</Button>
+        </ModalActions>
       </Form>
-    </Card>
+      {/* 放在拜访表单之外, 避免提交事件沿组件树冒泡到拜访表单; 主管新增的客户直接可选, 刷新客户名单 */}
+      <CustomerFormModal open={newCustomer} onClose={() => setNewCustomer(false)} onSaved={reload} />
+    </>
   )
 }

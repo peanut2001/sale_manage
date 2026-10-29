@@ -1,19 +1,20 @@
 import { PlusOutlined, UploadOutlined } from '@ant-design/icons'
-import { Alert, Button, Card, Form, Input, Select, Space, Table, Upload } from 'antd'
-import { Link, useNavigate } from 'react-router'
+import { Alert, Button, Card, Form, Input, Select, Space, Table, Tooltip, Upload } from 'antd'
+import { useState } from 'react'
+import { Link } from 'react-router'
 import { post } from '../../api'
 import FilterCard, { FCol } from '../../components/FilterCard'
-import PageHeader from '../../components/PageHeader'
 import { LevelTag, StatusTag } from '../../components/Tags'
 import { useAction, useApi, useFilters, useOptions } from '../../hooks'
 import { useAuth, useMe } from '../../session'
 import type { Customer, Result } from '../../types'
 import { pagination, toOptions } from '../../utils'
+import CustomerFormModal from './CustomerFormModal'
 
 export default function CustomerList() {
   const { session } = useAuth()
   const { isManager } = useMe()
-  const navigate = useNavigate()
+  const [open, setOpen] = useState(false)
   const opts = useOptions()
   const filters = useFilters()
   const state = useApi<{ rows: Customer[] }>(`/api/customers?${filters.query}`)
@@ -30,13 +31,21 @@ export default function CustomerList() {
 
   return (
     <>
-      <PageHeader title="客户名单"
-        extra={
-          <Button type="primary" icon={<PlusOutlined />} onClick={() => navigate('/customers/new')}>
-            {isManager ? '新增客户' : '申请新增客户'}
-          </Button>
-        } />
-      <FilterCard filters={filters}>
+      <FilterCard filters={filters} total={state.data?.rows.length}
+        toolbar={
+          <>
+            <Button type="primary" icon={<PlusOutlined />} onClick={() => setOpen(true)}>
+              {isManager ? '新增客户' : '申请新增客户'}
+            </Button>
+            {isManager && (
+              <Tooltip title="Excel（.xlsx）第一行为表头，列顺序：客户名称 / 等级（A/B/C）/ 行业 / 地区 / 地址 / 负责销售（姓名或用户名）">
+                <Upload accept=".xlsx" showUploadList={false} beforeUpload={(f) => (void importFile(f), false)}>
+                  <Button icon={<UploadOutlined />} loading={loading}>导入 Excel</Button>
+                </Upload>
+              </Tooltip>
+            )}
+          </>
+        }>
         <FCol><Form.Item label="关键字" name="kw"><Input allowClear placeholder="名称/地区/行业" /></Form.Item></FCol>
         <FCol><Form.Item label="等级" name="level">
           <Select allowClear placeholder="全部" options={['A', 'B', 'C'].map((l) => ({ value: l, label: l }))} />
@@ -49,19 +58,6 @@ export default function CustomerList() {
           <Select allowClear placeholder="全部" showSearch={{ optionFilterProp: 'label' }} options={toOptions(opts.owners)} />
         </Form.Item></FCol>
       </FilterCard>
-
-      {isManager && (
-        <Card size="small" className="mb16">
-          <div className="import-bar">
-            <span className="hint">
-              批量导入 Excel (.xlsx) — 第一行为表头, 列顺序: 客户名称 / 等级(A/B/C) / 行业 / 地区 / 地址 / 负责销售(姓名或用户名)
-            </span>
-            <Upload accept=".xlsx" showUploadList={false} beforeUpload={(f) => (void importFile(f), false)}>
-              <Button icon={<UploadOutlined />} loading={loading}>导入 Excel</Button>
-            </Upload>
-          </div>
-        </Card>
-      )}
 
       {state.error && <Alert type="error" showIcon title={state.error.message} className="mb16" />}
       <Card>
@@ -91,6 +87,7 @@ export default function CustomerList() {
             },
           ]} />
       </Card>
+      <CustomerFormModal open={open} onClose={() => setOpen(false)} onSaved={state.reload} />
     </>
   )
 }

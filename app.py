@@ -143,10 +143,10 @@ def load_user():
     if request.method not in ("GET", "HEAD", "OPTIONS"):
         token = request.headers.get("X-CSRF-Token")
         if not token or token != session.get("_csrf"):
-            abort(400, "页面已过期, 请刷新页面后重试")
+            abort(400, "页面已过期，请刷新页面后重试")
     if g.user and g.user["must_change_pw"] and request.endpoint not in (
             "session_info", "change_password", "logout", "spa"):
-        return fail("首次登录或密码被重置, 请先修改密码", status=403, code="must_change_pw")
+        return fail("首次登录或密码被重置，请先修改密码", status=403, code="must_change_pw")
 
 
 def csrf_token():
@@ -321,7 +321,7 @@ def login():
     now = time.time()
     _login_fail[ip] = [t for t in _login_fail[ip] if now - t < 600]
     if len(_login_fail[ip]) >= 5:
-        return fail("登录失败次数过多, 请 10 分钟后再试")
+        return fail("登录失败次数过多，请 10 分钟后再试")
     user = q("SELECT * FROM users WHERE username=? AND active=1", (f_str("username"),), one=True)
     if user and check_password_hash(user["password_hash"], str(body().get("password") or "")):
         _login_fail.pop(ip, None)
@@ -348,7 +348,7 @@ def change_password():
     if not check_password_hash(g.user["password_hash"], old):
         return fail("原密码错误")
     if len(new) < 8 or new.isdigit() or new.isalpha():
-        return fail("新密码至少 8 位, 且需同时包含字母和数字")
+        return fail("新密码至少 8 位，且需同时包含字母和数字")
     if new != new2:
         return fail("两次输入的新密码不一致")
     execute("UPDATE users SET password_hash=?, must_change_pw=0 WHERE id=?",
@@ -388,9 +388,6 @@ def dashboard():
                   f"JOIN customers c ON c.id=v.customer_id JOIN users u ON u.id=v.user_id "
                   f"WHERE next_date != '' AND next_date BETWEEN ? AND ? {sql} ORDER BY next_date LIMIT 10",
                   [(today - timedelta(days=3)).isoformat(), (today + timedelta(days=7)).isoformat()] + args)
-    this_week = week_monday(today).isoformat()
-    has_weekly = q("SELECT id, status FROM weekly_reports WHERE user_id=? AND week_start=?",
-                   (g.user["id"], this_week), one=True)
     rejected = q(f"SELECT 'trip' t, id, start_date d, destination title FROM trips WHERE user_id=? AND status='rejected' "
                  f"UNION ALL SELECT 'weekly', id, week_start, '周报' FROM weekly_reports WHERE user_id=? AND status='rejected' "
                  f"UNION ALL SELECT 'monthly', id, month, '月度报告' FROM monthly_reports WHERE user_id=? AND status='rejected'",
@@ -398,8 +395,7 @@ def dashboard():
     rejected = [{"type": r["t"], "id": r["id"], "label": TARGETS[r["t"]][1], "d": r["d"], "title": r["title"]}
                 for r in rejected]
     return jsonify(month=month, visits=dict(month_visits), trips=dict(month_trips),
-                   recent=dicts(recent), followups=dicts(followups), this_week=this_week,
-                   weekly=dict(has_weekly) if has_weekly else None, rejected=rejected)
+                   recent=dicts(recent), followups=dicts(followups), rejected=rejected)
 
 
 # ---------------------------------------------------------------- 客户拜访
@@ -456,7 +452,7 @@ def editable_visit(vid):
     v = q("SELECT * FROM visits WHERE id=?", (vid,), one=True)
     check_owner(v)
     if not visit_editable(v):
-        abort(403, "该记录已随出差报告提交, 不能修改")
+        abort(403, "该记录已随出差报告提交，不能修改")
     return v
 
 
@@ -494,7 +490,7 @@ def visit_save(vid=None):
         if not trip:
             trip_id = None
         elif vdate and not (trip["start_date"] <= vdate.isoformat() <= trip["end_date"]):
-            errors.append(f"拜访日期不在所选出差行程 ({trip['start_date']} ~ {trip['end_date']}) 内")
+            errors.append(f"拜访日期不在所选出差行程（{trip['start_date']} ~ {trip['end_date']}）内")
     if errors:
         return fail(*errors)
     data = (cid, trip_id, vdate.isoformat(), f_str("start_time"), f_str("end_time"),
@@ -614,7 +610,7 @@ def trip_save(tid=None):
                       "cost_transport, cost_hotel, cost_meal, cost_other, summary, status) "
                       "VALUES (?,?,?,?,?,?,?,?,?,?,?,?)", (g.user["id"],) + data)
     audit("提交出差报告" if submit else "保存出差报告", f"#{tid}")
-    return ok("出差报告已提交, 等待主管审批" if submit else "已保存草稿, 可继续添加拜访记录", id=tid)
+    return ok("出差报告已提交，等待主管审批" if submit else "已保存草稿，可继续添加拜访记录", id=tid)
 
 
 @app.route("/api/trips/<int:tid>")
@@ -636,7 +632,7 @@ def trip_submit(tid):
         abort(403)
     execute("UPDATE trips SET status='submitted', updated_at=datetime('now','localtime') WHERE id=?", (tid,))
     audit("提交出差报告", f"#{tid}")
-    return ok("已提交, 等待主管审批")
+    return ok("已提交，等待主管审批")
 
 
 @app.route("/api/trips/<int:tid>", methods=["DELETE"])
@@ -648,7 +644,7 @@ def trip_delete(tid):
     execute("UPDATE visits SET trip_id=NULL WHERE trip_id=?", (tid,))
     execute("DELETE FROM trips WHERE id=?", (tid,))
     audit("删除出差报告", f"#{tid}")
-    return ok("出差报告已删除 (其中的拜访记录已保留)")
+    return ok("出差报告已删除（其中的拜访记录已保留）")
 
 
 # ---------------------------------------------------------------- 周报
@@ -700,7 +696,7 @@ def weekly_save(wid=None):
     dup = q("SELECT id FROM weekly_reports WHERE user_id=? AND week_start=? AND id!=?",
             (g.user["id"], monday.isoformat(), wid or 0), one=True)
     if dup:
-        return fail("该周的周报已存在, 已为你打开", status=409, dup_id=dup["id"])
+        return fail("该周的周报已存在，已为你打开", status=409, dup_id=dup["id"])
     status = "submitted" if f_str("action") == "submit" else "draft"
     data = (monday.isoformat(), f_str("summary"), f_str("problems"), f_str("next_plan"), status)
     if w:
@@ -822,41 +818,41 @@ def analyze(s):
     """根据统计数据生成文字分析"""
     out = []
     if s["visit_count"] == 0:
-        out.append("本月无客户拜访记录, 请核实是否漏填, 或说明原因。")
+        out.append("本月无客户拜访记录，请核实是否漏填，或说明原因。")
     else:
-        out.append(f"本月共拜访客户 {s['visit_count']} 次, 覆盖客户 {s['customer_count']} 家, "
-                   f"接触客户人员 {s['contact_count']} 人; 出差 {s['trip_count']} 次共 {s['trip_days']} 天, "
+        out.append(f"本月共拜访客户 {s['visit_count']} 次，覆盖客户 {s['customer_count']} 家，"
+                   f"接触客户人员 {s['contact_count']} 人；出差 {s['trip_count']} 次共 {s['trip_days']} 天，"
                    f"差旅费用合计 {s['cost_total']:,.2f} 元。")
         if s["prev_visits"]:
             diff = (s["visit_count"] - s["prev_visits"]) / s["prev_visits"] * 100
             word = "增加" if diff >= 0 else "减少"
-            out.append(f"拜访次数较上月 ({s['prev_visits']} 次) {word} {abs(diff):.0f}%。")
+            out.append(f"拜访次数较上月（{s['prev_visits']} 次）{word} {abs(diff):.0f}%。")
         if s["new_customers"]:
-            out.append(f"新开发客户 {len(s['new_customers'])} 家: {'、'.join(s['new_customers'][:8])}。")
+            out.append(f"新开发客户 {len(s['new_customers'])} 家：{'、'.join(s['new_customers'][:8])}。")
         else:
-            out.append("本月无新开发客户, 建议适当增加新客户开拓。")
+            out.append("本月无新开发客户，建议适当增加新客户开拓。")
         if s["trip_days"]:
             per_day = s["trip_visit_count"] / s["trip_days"]
             out.append(f"出差期间日均拜访 {per_day:.1f} 次" +
-                       ("; 出差效率偏低, 建议出差前提前预约、集中安排拜访路线。" if per_day < 1 else "。"))
+                       ("；出差效率偏低，建议出差前提前预约、集中安排拜访路线。" if per_day < 1 else "。"))
         if s["cost_per_visit"]:
             out.append(f"出差单次拜访成本约 {s['cost_per_visit']:,.2f} 元。")
         if s["top_customers"] and s["visit_count"] >= 5:
             name, n = s["top_customers"][0]
             if n / s["visit_count"] >= 0.4:
-                out.append(f"拜访集中于「{name}」({n} 次, 占 {n / s['visit_count']:.0%}), 注意客户分布是否均衡。")
+                out.append(f"拜访集中于「{name}」（{n} 次，占 {n / s['visit_count']:.0%}），注意客户分布是否均衡。")
         if s["pipeline"]:
             out.append(f"本月拜访中登记的预计商机金额合计 {s['pipeline']:,.2f} 万元。")
     if s["owned_a"]:
         if s["a_missed"]:
-            out.append(f"负责的 A 类重点客户 {s['owned_a']} 家, 本月未拜访 {len(s['a_missed'])} 家: "
+            out.append(f"负责的 A 类重点客户 {s['owned_a']} 家，本月未拜访 {len(s['a_missed'])} 家："
                        f"{'、'.join(s['a_missed'][:8])}。")
         else:
             out.append(f"负责的 {s['owned_a']} 家 A 类重点客户本月已全部覆盖。")
     if s["stale"]:
-        out.append(f"有 {len(s['stale'])} 家负责客户超过 60 天未拜访, 存在流失风险。")
+        out.append(f"有 {len(s['stale'])} 家负责客户超过 60 天未拜访，存在流失风险。")
     if s["weeks"]:
-        out.append(f"本月应交周报 {s['weeks']} 份, 已提交 {s['weekly_done']} 份。")
+        out.append(f"本月应交周报 {s['weeks']} 份，已提交 {s['weekly_done']} 份。")
     return "\n".join(out)
 
 
@@ -947,7 +943,7 @@ def monthly_generate():
     for uid in targets:
         generate_monthly(db, uid, month, force=True)
     audit("生成月报", month)
-    return ok(f"{month} 月度报告已生成/刷新 ({len(targets)} 人); 已提交或已通过的报告不会被覆盖")
+    return ok(f"{month} 月度报告已生成/刷新（{len(targets)} 人），已提交或已通过的报告不会被覆盖")
 
 
 def monthly_row(mid):
@@ -1086,7 +1082,7 @@ def customer_save(cid=None):
         cid = execute("INSERT INTO customers (name, level, industry, region, address, owner_id, status, "
                       "remark, created_by) VALUES (?,?,?,?,?,?,?,?,?)", data + (g.user["id"],))
     audit("保存客户", name)
-    return ok("已提交, 主管审核通过后即可在拜访记录中选择" if status == "pending" and not is_manager()
+    return ok("已提交，主管审核通过后即可在拜访记录中选择" if status == "pending" and not is_manager()
               else "客户已保存", id=cid)
 
 
@@ -1120,7 +1116,7 @@ def customer_import():
     try:
         ws = load_workbook(file, read_only=True).active
     except Exception:  # noqa: BLE001
-        return fail("无法读取文件, 请上传 .xlsx 格式")
+        return fail("无法读取文件，请上传 .xlsx 格式")
     users = {r["username"]: r["id"] for r in q("SELECT id, username FROM users")}
     users.update({r["name"]: r["id"] for r in q("SELECT id, name FROM users")})
     added = skipped = 0
@@ -1139,7 +1135,7 @@ def customer_import():
                  str(row[4] or ""), users.get(str(row[5] or "").strip()), g.user["id"]))
         added += 1
     audit("导入客户", f"新增{added} 跳过{skipped}")
-    return ok(f"导入完成: 新增 {added} 家, 跳过重名 {skipped} 家")
+    return ok(f"导入完成：新增 {added} 家，跳过重名 {skipped} 家")
 
 
 # ---------------------------------------------------------------- 后台统计
@@ -1295,8 +1291,8 @@ def user_save(uid=None):
         uid = execute("INSERT INTO users (username, name, role, manager_id, region, phone, active, password_hash) "
                       "VALUES (?,?,?,?,?,?,?,?)", data + (generate_password_hash(pw),))
     audit("保存账号", username)
-    msgs.insert(0, "账号已保存" + (", 用户下次登录需修改密码" if pw else ""))
-    return ok("; ".join(msgs), id=uid)
+    msgs.insert(0, "账号已保存" + ("，用户下次登录需修改密码" if pw else ""))
+    return ok("；".join(msgs), id=uid)
 
 
 @app.route("/api/logs")

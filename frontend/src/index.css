@@ -4,6 +4,10 @@
 body {
   margin: 0;
   background: #f3f6fb;
+  color: #1f2937;
+  /* 与 theme.ts 的 FONT 一致: 西文/数字用 Segoe UI, 中文回退到苹方/微软雅黑 */
+  font-family: "Segoe UI", -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei",
+    "Noto Sans SC", "Helvetica Neue", Arial, sans-serif;
   -webkit-font-smoothing: antialiased;
 }
 
@@ -34,8 +38,40 @@ body {
   border-inline-end: 0 !important;
   padding: 6px 12px;
 }
+/* 侧边栏顶部: Logo + 系统名 + 收起按钮; 收起后只显示图标 */
+.sider-head {
+  display: flex;
+  align-items: center;
+  height: 64px;
+  padding-right: 10px;
+}
+.sider-head .app-brand {
+  flex: 1;
+  min-width: 0;
+  gap: 8px;
+  padding: 0 0 0 18px;
+  white-space: nowrap;
+}
+.sider-head.mini {
+  justify-content: center;
+  padding: 0;
+}
+.sider-toggle.ant-btn {
+  flex: none;
+  color: #6b7280;
+  font-size: 16px;
+}
+.sider-toggle.ant-btn:hover {
+  color: #2f6bff;
+}
+.app-sider.ant-layout-sider-collapsed .app-menu.ant-menu {
+  padding: 6px 8px;
+}
 .menu-badge {
   margin-left: 8px;
+}
+.menu-label {
+  display: block;
 }
 .app-header.ant-layout-header {
   position: sticky;
@@ -78,44 +114,13 @@ body {
 }
 .app-content {
   width: 100%;
-  max-width: 1440px;
-  margin: 0 auto;
   padding: 24px;
+}
+.ant-table {
+  font-variant-numeric: tabular-nums;
 }
 
 /* ---------- 页面通用 ---------- */
-.page-header {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 18px;
-}
-.page-header h1 {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 10px;
-  margin: 0;
-  font-size: 22px;
-  font-weight: 700;
-  color: #111827;
-}
-.page-header h1 .ant-tag {
-  margin: 0;
-  font-size: 13px;
-}
-.page-sub {
-  margin-top: 4px;
-  font-size: 13px;
-  color: #6b7280;
-}
-.page-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
 .page-skeleton {
   padding: 24px;
   background: #fff;
@@ -252,9 +257,6 @@ body {
   .app-content {
     padding: 14px 12px 32px;
   }
-  .page-header h1 {
-    font-size: 19px;
-  }
   .kpis {
     grid-template-columns: repeat(2, 1fr);
     gap: 12px;
@@ -290,9 +292,6 @@ body {
 .mb16 {
   margin-bottom: 16px;
 }
-.stack .page-header {
-  margin-bottom: 2px;
-}
 .full-height {
   height: 100%;
 }
@@ -326,13 +325,6 @@ body {
 .kv-row:last-child {
   border-bottom: 0;
 }
-.import-bar {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
 .summary-row td {
   font-weight: 700;
 }
@@ -347,4 +339,64 @@ body {
 .approval-comment {
   margin-top: 4px;
   color: #374151;
+}
+.list-total {
+  font-size: 13px;
+  font-weight: 400;
+  color: #6b7280;
+}
+/* 顶部卡片的工具栏: 左侧按钮, 右侧条数; 下方有筛选条件时加分隔线 */
+.filter-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.filter-toolbar:not(:last-child) {
+  padding-bottom: 12px;
+  margin-bottom: 12px;
+  border-bottom: 1px solid #f0f2f5;
+}
+/* 弹窗表单 */
+.form-modal .ant-modal-body {
+  padding-top: 8px;
+}
+.modal-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+  padding-top: 12px;
+  margin-top: 4px;
+  border-top: 1px solid #f0f2f5;
+}
+.modal-week-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.modal-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+/* 月报详情中指标卡放在卡片内, 改为浅底色块 */
+.card-kpis {
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  margin-bottom: 0;
+}
+.card-kpis .kpi {
+  background: #f7f9fc;
+  box-shadow: none;
+}
+.ant-card-head .hint {
+  font-weight: 400;
+}
+.modal-week-bar .ant-picker {
+  width: auto;
 }
