@@ -2,6 +2,7 @@ import { PlusOutlined } from '@ant-design/icons'
 import { Alert, Button, Card, DatePicker, Form, Input, Select, Table } from 'antd'
 import { useState } from 'react'
 import { Link } from 'react-router'
+import Clip from '../../components/Clip'
 import FilterCard, { FCol } from '../../components/FilterCard'
 import VisitFormModal from './VisitFormModal'
 import { LevelTag } from '../../components/Tags'
@@ -39,8 +40,7 @@ export default function VisitList() {
       </FilterCard>
       {state.error && <Alert type="error" showIcon title={state.error.message} className="mb16" />}
       <Card>
-        <Table<Visit> rowKey="id" loading={state.loading} dataSource={state.data?.rows} pagination={pagination}
-          scroll={{ x: 'max-content' }} locale={{ emptyText: '没有符合条件的记录' }}
+        <Table<Visit> rowKey="id" loading={state.loading} dataSource={state.data?.rows} pagination={pagination} locale={{ emptyText: '没有符合条件的记录' }}
           columns={[
             { title: '日期', dataIndex: 'visit_date', width: 110 },
             {
@@ -50,7 +50,7 @@ export default function VisitList() {
             { title: '销售员', dataIndex: 'sales' },
             { title: '类型', dataIndex: 'visit_type' },
             { title: '洽谈人员', dataIndex: 'contact_name', render: (v, r) => <>{v} <span className="hint">{r.contact_title}</span></> },
-            { title: '洽谈内容', dataIndex: 'content', ellipsis: true, width: 320, responsive: ['md'] },
+            { title: '洽谈内容', dataIndex: 'content', responsive: ['md'], render: (v) => <Clip text={v} width={320} /> },
             {
               title: '出差', dataIndex: 'trip_dest', responsive: ['md'],
               render: (v, r) => r.trip_id && <Link to={`/trips/${r.trip_id}`}>{v}</Link>,

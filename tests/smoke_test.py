@@ -1,4 +1,6 @@
 """冒烟测试: python tests/smoke_test.py  (使用临时数据库, 不影响正式数据)"""
+import gzip
+import json
 import os
 import sys
 import tempfile
@@ -179,12 +181,25 @@ with open(os.path.join(dist, "index.html"), "w", encoding="utf-8") as f:
     f.write("<div id=root></div>")
 with open(os.path.join(dist, "assets", "app.js"), "w", encoding="utf-8") as f:
     f.write("console.log(1)")
+with open(os.path.join(dist, "assets", "app.js.gz"), "wb") as f:
+    f.write(gzip.compress(b"console.log(1)"))
 A.DIST_DIR = dist
 spa = A.app.test_client()
 if b"id=root" not in spa.get("/trips/12").data:
     fails.append("前端路由未返回 index.html")
 if spa.get("/assets/app.js").data != b"console.log(1)":
     fails.append("构建产物未正确返回")
+r = spa.get("/assets/app.js", headers={"Accept-Encoding": "gzip, br"})
+if r.headers.get("Content-Encoding") != "gzip" or gzip.decompress(r.data) != b"console.log(1)" \
+        or "javascript" not in r.headers.get("Content-Type", ""):
+    fails.append("支持 gzip 时未返回预压缩的构建产物")
+
+# 较大的接口数据 gzip 压缩, 小的不压缩
+r = mgr.get("/api/visits", headers={"Accept-Encoding": "gzip"})
+if r.headers.get("Content-Encoding") != "gzip" or not json.loads(gzip.decompress(r.data))["rows"]:
+    fails.append("接口数据未正确压缩")
+if mgr.get("/api/session", headers={"Accept-Encoding": "gzip"}).headers.get("Content-Encoding"):
+    fails.append("小接口数据不应压缩")
 
 if fails:
     print("失败:\n  " + "\n  ".join(fails))

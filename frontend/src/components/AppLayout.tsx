@@ -7,6 +7,7 @@ import { Avatar, Badge, Button, Drawer, Dropdown, Grid, Layout, Menu, Result, Sk
 import { Suspense, useEffect, useState, type ReactNode } from 'react'
 import { Link, Navigate, Outlet, useLocation, useNavigate } from 'react-router'
 import { post } from '../api'
+import { prefetchPages } from '../routes'
 import { hasRole, useAuth } from '../session'
 import type { Role } from '../types'
 import Logo from './Logo'
@@ -40,10 +41,11 @@ export default function AppLayout() {
     localStorage.setItem(COLLAPSED_KEY, c ? '1' : '0')
   }
 
-  // 切换页面时刷新登录状态和待审批数
+  // 进入系统后空闲时预加载其他页面的代码
   useEffect(() => {
-    void refresh()
-  }, [loc.pathname, refresh])
+    const t = window.setTimeout(prefetchPages, 1500)
+    return () => window.clearTimeout(t)
+  }, [])
 
   const user = session.user
   if (!user) return <Navigate to={`/login?next=${encodeURIComponent(loc.pathname + loc.search)}`} replace />

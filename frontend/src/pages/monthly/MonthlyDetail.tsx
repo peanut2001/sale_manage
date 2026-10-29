@@ -86,7 +86,7 @@ function MonthlyBody({ data: d, reload }: { data: Data; reload: () => void }) {
       </Row>
 
       <Card title="出差行程">
-        <Table rowKey="id" dataSource={s.trips} pagination={false} size="small" scroll={{ x: 'max-content' }}
+        <Table rowKey="id" dataSource={s.trips} pagination={false} size="small"
           locale={{ emptyText: '本月无出差' }}
           columns={[
             { title: '日期', key: 'date', render: (_, t) => <Link to={`/trips/${t.id}`}>{t.start} ~ {t.end}</Link> },
@@ -113,7 +113,7 @@ function MonthlyBody({ data: d, reload }: { data: Data; reload: () => void }) {
       )}
 
       <Card title="拜访明细">
-        <Table dataSource={s.visits.map((v, key) => ({ ...v, key }))} pagination={false} size="small" scroll={{ x: 'max-content' }}
+        <Table dataSource={s.visits.map((v, key) => ({ ...v, key }))} pagination={false} size="small"
           locale={{ emptyText: '无' }}
           columns={[
             { title: '日期', dataIndex: 'date', width: 110 },

@@ -335,6 +335,13 @@ body {
   .app-content .ant-card-body {
     padding: 14px;
   }
+  /* 手机上表格横向滚动 (用 CSS 实现, 不用 Table 的 scroll 属性, 避免反复测量列宽) */
+  .app-content .ant-table-content {
+    overflow-x: auto;
+  }
+  .app-content .ant-table-content > table {
+    min-width: max-content;
+  }
 }
 .approval-comment {
   margin-top: 4px;
@@ -399,4 +406,9 @@ body {
 }
 .modal-week-bar .ant-picker {
   width: auto;
+}
+.clip {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }

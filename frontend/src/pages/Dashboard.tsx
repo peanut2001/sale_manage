@@ -1,6 +1,7 @@
 import { AuditOutlined, CarOutlined, ContactsOutlined, SolutionOutlined, WalletOutlined } from '@ant-design/icons'
 import { Alert, Card, Col, Row, Table, Tag } from 'antd'
 import { Link } from 'react-router'
+import Clip from '../components/Clip'
 import Async from '../components/Async'
 import Kpi from '../components/Kpi'
 import { useApi } from '../hooks'
@@ -44,7 +45,7 @@ export default function Dashboard() {
           <Row gutter={[16, 16]}>
             <Col xs={24} lg={12}>
               <Card title="近期拜访" extra={<Link to="/visits">全部</Link>}>
-                <Table<Visit> rowKey="id" size="small" pagination={false} dataSource={d.recent} scroll={{ x: 'max-content' }}
+                <Table<Visit> rowKey="id" size="small" pagination={false} dataSource={d.recent}
                   locale={{ emptyText: '暂无拜访记录' }}
                   columns={[
                     { title: '日期', dataIndex: 'visit_date', width: 110 },
@@ -56,7 +57,7 @@ export default function Dashboard() {
             </Col>
             <Col xs={24} lg={12}>
               <Card title="近 7 天待跟进">
-                <Table<Visit> rowKey="id" size="small" pagination={false} dataSource={d.followups} scroll={{ x: 'max-content' }}
+                <Table<Visit> rowKey="id" size="small" pagination={false} dataSource={d.followups}
                   locale={{ emptyText: '暂无待跟进事项' }}
                   columns={[
                     {
@@ -65,7 +66,7 @@ export default function Dashboard() {
                     },
                     { title: '客户', dataIndex: 'customer', render: (v, r) => <Link to={`/customers/${r.customer_id}`}>{v}</Link> },
                     ...(isManager ? [{ title: '销售员', dataIndex: 'sales' }] : []),
-                    { title: '下一步', dataIndex: 'next_step', ellipsis: true },
+                    { title: '下一步', dataIndex: 'next_step', render: (v) => <Clip text={v} width={240} /> },
                   ]} />
               </Card>
             </Col>

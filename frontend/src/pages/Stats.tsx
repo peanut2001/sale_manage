@@ -3,6 +3,7 @@ import { Alert, Button, Card, Col, DatePicker, Form, Input, Row, Select, Table, 
 import dayjs from 'dayjs'
 import { Link } from 'react-router'
 import { qs } from '../api'
+import Clip from '../components/Clip'
 import Bars from '../components/Bars'
 import FilterCard, { FCol } from '../components/FilterCard'
 import { LevelTag } from '../components/Tags'
@@ -77,8 +78,7 @@ export default function Stats() {
 
       <div className="stack">
         <Card title="按销售员">
-          <Table<SalesRow> rowKey="id" loading={state.loading} dataSource={d?.by_sales} pagination={false}
-            scroll={{ x: 'max-content' }} locale={{ emptyText: '所选范围内无数据' }}
+          <Table<SalesRow> rowKey="id" loading={state.loading} dataSource={d?.by_sales} pagination={false} locale={{ emptyText: '所选范围内无数据' }}
             columns={[
               { title: '销售员', dataIndex: 'name' },
               { title: '拜访次数', dataIndex: 'n', align: 'right' },
@@ -100,8 +100,9 @@ export default function Stats() {
           </Col>
           <Col xs={24} lg={14}>
             <Card title="按客户（前 100）" className="full-height">
-              <Table<CustomerRow> rowKey="id" loading={state.loading} dataSource={d?.by_customer} pagination={false}
-                size="small" scroll={{ x: 'max-content', y: 360 }} locale={{ emptyText: '无' }}
+              <Table<CustomerRow> rowKey="id" loading={state.loading} dataSource={d?.by_customer}
+                pagination={{ pageSize: 10, hideOnSinglePage: true, showSizeChanger: false, size: 'small' }}
+                size="small" locale={{ emptyText: '无' }}
                 columns={[
                   { title: '客户', dataIndex: 'name', render: (v, r) => <><LevelTag level={r.level} /><Link to={`/customers/${r.id}`}>{v}</Link></> },
                   { title: '次数', dataIndex: 'n', align: 'right', width: 60 },
@@ -115,7 +116,7 @@ export default function Stats() {
 
         <Card title="拜访明细" extra={<span className="hint">最近 200 条，完整数据请导出 Excel</span>}>
           <Table<Visit> rowKey="id" loading={state.loading} dataSource={d?.detail} pagination={pagination}
-            scroll={{ x: 'max-content' }} locale={{ emptyText: '无' }}
+            scroll={{ x: 'max-content' }} /* 列多, 保留横向滚动 */ locale={{ emptyText: '无' }}
             columns={[
               { title: '日期', dataIndex: 'visit_date', width: 110 },
               { title: '时间', key: 'time', render: (_, v) => <span className="hint">{v.start_time}{v.end_time && `-${v.end_time}`}</span> },
@@ -126,8 +127,8 @@ export default function Stats() {
                 title: '洽谈人员', dataIndex: 'contact_name',
                 render: (n, v) => <>{n} {v.contact_title}{v.attendees && <div className="hint">{v.attendees}</div>}</>,
               },
-              { title: '洽谈内容', dataIndex: 'content', ellipsis: true, width: 260 },
-              { title: '成果', dataIndex: 'result', ellipsis: true, width: 200 },
+              { title: '洽谈内容', dataIndex: 'content', render: (v) => <Clip text={v} width={260} /> },
+              { title: '成果', dataIndex: 'result', render: (v) => <Clip text={v} width={200} /> },
             ]} />
         </Card>
       </div>

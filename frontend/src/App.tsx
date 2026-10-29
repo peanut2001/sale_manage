@@ -4,28 +4,29 @@ import { lazy, Suspense, type ReactElement } from 'react'
 import { BrowserRouter, Route, Routes } from 'react-router'
 import AppLayout, { RoleRoute } from './components/AppLayout'
 import AuthProvider from './components/AuthProvider'
+import { pageLoaders } from './routes'
 import { theme } from './theme'
 import type { Role } from './types'
 
-// 按页面拆分打包, 登录页只加载自己需要的部分
-const Login = lazy(() => import('./pages/Login'))
-const Dashboard = lazy(() => import('./pages/Dashboard'))
-const Password = lazy(() => import('./pages/Password'))
-const VisitList = lazy(() => import('./pages/visits/VisitList'))
-const VisitDetail = lazy(() => import('./pages/visits/VisitDetail'))
-const TripList = lazy(() => import('./pages/trips/TripList'))
-const TripDetail = lazy(() => import('./pages/trips/TripDetail'))
-const WeeklyList = lazy(() => import('./pages/weekly/WeeklyList'))
-const WeeklyDetail = lazy(() => import('./pages/weekly/WeeklyDetail'))
-const MonthlyList = lazy(() => import('./pages/monthly/MonthlyList'))
-const MonthlyDetail = lazy(() => import('./pages/monthly/MonthlyDetail'))
-const Approvals = lazy(() => import('./pages/Approvals'))
-const CustomerList = lazy(() => import('./pages/customers/CustomerList'))
-const CustomerDetail = lazy(() => import('./pages/customers/CustomerDetail'))
-const Stats = lazy(() => import('./pages/Stats'))
-const UserList = lazy(() => import('./pages/users/UserList'))
-const Logs = lazy(() => import('./pages/Logs'))
-const NotFound = lazy(() => import('./pages/NotFound'))
+// 按页面拆分打包, 登录页只加载自己需要的部分 (加载器见 routes.ts)
+const Login = lazy(pageLoaders.Login)
+const Dashboard = lazy(pageLoaders.Dashboard)
+const Password = lazy(pageLoaders.Password)
+const VisitList = lazy(pageLoaders.VisitList)
+const VisitDetail = lazy(pageLoaders.VisitDetail)
+const TripList = lazy(pageLoaders.TripList)
+const TripDetail = lazy(pageLoaders.TripDetail)
+const WeeklyList = lazy(pageLoaders.WeeklyList)
+const WeeklyDetail = lazy(pageLoaders.WeeklyDetail)
+const MonthlyList = lazy(pageLoaders.MonthlyList)
+const MonthlyDetail = lazy(pageLoaders.MonthlyDetail)
+const Approvals = lazy(pageLoaders.Approvals)
+const CustomerList = lazy(pageLoaders.CustomerList)
+const CustomerDetail = lazy(pageLoaders.CustomerDetail)
+const Stats = lazy(pageLoaders.Stats)
+const UserList = lazy(pageLoaders.UserList)
+const Logs = lazy(pageLoaders.Logs)
+const NotFound = lazy(pageLoaders.NotFound)
 
 const only = (roles: Role[], el: ReactElement) => <RoleRoute roles={roles}>{el}</RoleRoute>
 const MANAGERS: Role[] = ['manager', 'admin']

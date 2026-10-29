@@ -36,8 +36,7 @@ export default function TripList() {
       </FilterCard>
       {state.error && <Alert type="error" showIcon title={state.error.message} className="mb16" />}
       <Card>
-        <Table<Trip> rowKey="id" loading={state.loading} dataSource={state.data?.rows} pagination={pagination}
-          scroll={{ x: 'max-content' }} locale={{ emptyText: '暂无出差报告' }}
+        <Table<Trip> rowKey="id" loading={state.loading} dataSource={state.data?.rows} pagination={pagination} locale={{ emptyText: '暂无出差报告' }}
           columns={[
             { title: '出差日期', key: 'date', render: (_, t) => <Link to={`/trips/${t.id}`}>{t.start_date} ~ {t.end_date}</Link> },
             { title: '目的地', dataIndex: 'destination' },

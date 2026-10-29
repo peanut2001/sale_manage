@@ -25,7 +25,6 @@ export default function UserList() {
       {state.error && <Alert type="error" showIcon title={state.error.message} className="mb16" />}
       <Card>
         <Table<Account> rowKey="id" loading={state.loading} dataSource={state.data?.rows} pagination={pagination}
-          scroll={{ x: 'max-content' }}
           columns={[
             { title: '用户名', dataIndex: 'username' },
             { title: '姓名', dataIndex: 'name' },

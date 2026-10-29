@@ -43,8 +43,7 @@ export default function CustomerDetail() {
             </Col>
           </Row>
           <Card title={`拜访历史（${visits.length}）`}>
-            <Table<Visit> rowKey="id" dataSource={visits} pagination={{ pageSize: 20, hideOnSinglePage: true }}
-              scroll={{ x: 'max-content' }} locale={{ emptyText: '暂无拜访' }}
+            <Table<Visit> rowKey="id" dataSource={visits} pagination={{ pageSize: 20, hideOnSinglePage: true }} locale={{ emptyText: '暂无拜访' }}
               columns={[
                 { title: '日期', dataIndex: 'visit_date', width: 110, render: (v, r) => <Link to={`/visits/${r.id}`}>{v}</Link> },
                 { title: '销售员', dataIndex: 'sales' },

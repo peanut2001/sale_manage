@@ -57,8 +57,35 @@ export function useFilters(opts: { dates?: string[]; months?: string[] } = {}) {
   return { params, initial, apply, query: sp.toString() }
 }
 
+// 下拉选项 (销售员/客户/负责人) 全局缓存: 切换页面不再重复请求和重复渲染
+const EMPTY_OPTIONS: Options = { users: [], customers: [], owners: [] }
+const OPTIONS_TTL = 60_000
+let optionsCache: { data: Options; at: number } | null = null
+const optionsListeners = new Set<(o: Options) => void>()
+
+/** 重新获取下拉选项 (新增/审核客户、修改账号后调用) */
+export function refreshOptions() {
+  return api<Options>('/api/options').then((data) => {
+    optionsCache = { data, at: Date.now() }
+    optionsListeners.forEach((fn) => fn(data))
+  }, () => {})
+}
+
+/** 切换登录用户时清空 (不同角色可见的销售员不同) */
+export function clearOptions() {
+  optionsCache = null
+}
+
 export function useOptions() {
-  return useApi<Options>('/api/options').data ?? { users: [], customers: [], owners: [] }
+  const [data, setData] = useState(optionsCache?.data ?? EMPTY_OPTIONS)
+  useEffect(() => {
+    optionsListeners.add(setData)
+    if (!optionsCache || Date.now() - optionsCache.at > OPTIONS_TTL) void refreshOptions()
+    return () => {
+      optionsListeners.delete(setData)
+    }
+  }, [])
+  return data
 }
 
 /** 执行写操作: 成功提示后台返回的 message, 失败提示错误; 返回结果或 undefined */

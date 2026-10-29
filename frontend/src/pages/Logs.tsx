@@ -11,7 +11,7 @@ export default function Logs() {
       <Async state={state}>
         {({ rows }) => (
           <Card>
-            <Table<LogRow> rowKey="id" dataSource={rows} pagination={pagination} scroll={{ x: 'max-content' }}
+            <Table<LogRow> rowKey="id" dataSource={rows} pagination={pagination}
               columns={[
                 { title: '时间', dataIndex: 'created_at', width: 170 },
                 { title: '用户', dataIndex: 'name', render: (v) => v || '-' },

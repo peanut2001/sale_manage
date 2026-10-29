@@ -2,7 +2,7 @@ import { Button, Checkbox, Col, Form, Input, Row, Select } from 'antd'
 import { post, put } from '../../api'
 import Async from '../../components/Async'
 import FormModal, { ModalActions } from '../../components/FormModal'
-import { useAction, useApi } from '../../hooks'
+import { refreshOptions, useAction, useApi } from '../../hooks'
 import { useAuth } from '../../session'
 import type { Account, Option, Result } from '../../types'
 import { serialize, toOptions } from '../../utils'
@@ -52,6 +52,7 @@ function UserFormBody({ data, onClose, onSaved }: Omit<Props, 'open' | 'id'> & {
   const submit = async (values: object) => {
     const body = serialize(values)
     if (await run(() => (u ? put<Result>(`/api/users/${u.id}`, body) : post<Result>('/api/users', body)))) {
+      void refreshOptions()
       onSaved()
       onClose()
     }

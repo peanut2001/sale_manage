@@ -1,7 +1,7 @@
 import { Button, Col, Form, Input, Row, Select } from 'antd'
 import { post, put } from '../../api'
 import FormModal, { ModalActions } from '../../components/FormModal'
-import { useAction, useOptions } from '../../hooks'
+import { refreshOptions, useAction, useOptions } from '../../hooks'
 import { useAuth, useMe } from '../../session'
 import type { Customer, Result } from '../../types'
 import { serialize, toOptions } from '../../utils'
@@ -39,6 +39,7 @@ function CustomerFormBody({ customer, onClose, onSaved }: Omit<Props, 'open'>) {
     const body = serialize(values)
     const res = await run(() => (customer ? put<Result>(`/api/customers/${customer.id}`, body) : post<Result>('/api/customers', body)))
     if (res) {
+      void refreshOptions()
       onSaved(res.id!)
       onClose()
     }

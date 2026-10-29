@@ -4,8 +4,10 @@
        python serve.py          (生产, waitress)
 """
 import calendar
+import gzip
 import io
 import json
+import mimetypes
 import os
 import secrets
 import sqlite3
@@ -120,6 +122,19 @@ def fail(*errors, status=400, **data):
 
 ERROR_MSGS = {400: "请求无效", 401: "请先登录", 403: "没有权限执行该操作", 404: "页面或记录不存在",
               405: "请求方式不支持"}
+
+
+@app.after_request
+def compress_json(resp):
+    """较大的接口数据压缩后返回 (公网访问时明显更快)"""
+    if (resp.status_code == 200 and resp.mimetype == "application/json" and not resp.direct_passthrough
+            and "gzip" in request.headers.get("Accept-Encoding", "")):
+        data = resp.get_data()
+        if len(data) > 2048:
+            resp.set_data(gzip.compress(data, 6))
+            resp.headers["Content-Encoding"] = "gzip"
+            resp.headers["Vary"] = "Accept-Encoding"
+    return resp
 
 
 @app.errorhandler(HTTPException)
@@ -1311,7 +1326,15 @@ def spa(path):
         abort(404)
     if path and os.path.isfile(os.path.join(DIST_DIR, path)):
         # 带哈希的构建产物可长期缓存; index.html 每次校验
-        return send_from_directory(DIST_DIR, path, max_age=31536000 if path.startswith("assets/") else None)
+        max_age = 31536000 if path.startswith("assets/") else None
+        # 构建时已预压缩 (frontend/scripts/gzip-assets.mjs), 浏览器支持就返回 .gz
+        if "gzip" in request.headers.get("Accept-Encoding", "") and os.path.isfile(os.path.join(DIST_DIR, path + ".gz")):
+            resp = send_from_directory(DIST_DIR, path + ".gz", mimetype=mimetypes.guess_type(path)[0], max_age=max_age)
+            resp.headers["Content-Encoding"] = "gzip"
+        else:
+            resp = send_from_directory(DIST_DIR, path, max_age=max_age)
+        resp.headers["Vary"] = "Accept-Encoding"
+        return resp
     if not os.path.isfile(os.path.join(DIST_DIR, "index.html")):
         return "前端尚未构建: 请在 frontend 目录执行 npm run build (开发时使用 npm run dev)", 503
     return send_from_directory(DIST_DIR, "index.html")

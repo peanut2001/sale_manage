@@ -5,7 +5,7 @@ import { Link } from 'react-router'
 import { post } from '../../api'
 import FilterCard, { FCol } from '../../components/FilterCard'
 import { LevelTag, StatusTag } from '../../components/Tags'
-import { useAction, useApi, useFilters, useOptions } from '../../hooks'
+import { refreshOptions, useAction, useApi, useFilters, useOptions } from '../../hooks'
 import { useAuth, useMe } from '../../session'
 import type { Customer, Result } from '../../types'
 import { pagination, toOptions } from '../../utils'
@@ -21,12 +21,18 @@ export default function CustomerList() {
   const [run, loading] = useAction()
 
   const review = async (id: number, ok: boolean) => {
-    if (await run(() => post<Result>(`/api/customers/${id}/approve`, { ok }))) state.reload()
+    if (await run(() => post<Result>(`/api/customers/${id}/approve`, { ok }))) {
+      state.reload()
+      void refreshOptions()
+    }
   }
   const importFile = async (file: File) => {
     const fd = new FormData()
     fd.append('file', file)
-    if (await run(() => post<Result>('/api/customers/import', fd))) state.reload()
+    if (await run(() => post<Result>('/api/customers/import', fd))) {
+      state.reload()
+      void refreshOptions()
+    }
   }
 
   return (
@@ -61,8 +67,7 @@ export default function CustomerList() {
 
       {state.error && <Alert type="error" showIcon title={state.error.message} className="mb16" />}
       <Card>
-        <Table<Customer> rowKey="id" loading={state.loading} dataSource={state.data?.rows} pagination={pagination}
-          scroll={{ x: 'max-content' }} locale={{ emptyText: '暂无客户' }}
+        <Table<Customer> rowKey="id" loading={state.loading} dataSource={state.data?.rows} pagination={pagination} locale={{ emptyText: '暂无客户' }}
           columns={[
             { title: '等级', dataIndex: 'level', width: 64, render: (l) => <LevelTag level={l} /> },
             { title: '客户名称', dataIndex: 'name', render: (v, c) => <Link to={`/customers/${c.id}`}>{v}</Link> },

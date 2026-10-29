@@ -21,8 +21,7 @@ export default function Approvals() {
       {({ items }) => (
         <>
           <Card>
-            <Table<Item> rowKey={(r) => r.type + r.id} dataSource={items} pagination={pagination}
-              scroll={{ x: 'max-content' }} locale={{ emptyText: '没有待审批的报告' }}
+            <Table<Item> rowKey={(r) => r.type + r.id} dataSource={items} pagination={pagination} locale={{ emptyText: '没有待审批的报告' }}
               columns={[
                 { title: '类型', dataIndex: 'label' },
                 { title: '销售员', dataIndex: 'sales' },

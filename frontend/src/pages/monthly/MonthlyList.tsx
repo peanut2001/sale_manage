@@ -48,8 +48,7 @@ export default function MonthlyList() {
           </>
         )} />
       <Card className="mb16">
-        <Table<MonthlyBrief> rowKey="id" loading={state.loading} dataSource={rows} pagination={false}
-          scroll={{ x: 'max-content' }} locale={{ emptyText: '该月报告尚未生成' }}
+        <Table<MonthlyBrief> rowKey="id" loading={state.loading} dataSource={rows} pagination={false} locale={{ emptyText: '该月报告尚未生成' }}
           columns={[
             { title: '销售员', dataIndex: 'sales', render: (v, r) => <Link to={`/monthly/${r.id}`}>{v}</Link> },
             { title: '拜访', dataIndex: 'visit_count', align: 'right' },

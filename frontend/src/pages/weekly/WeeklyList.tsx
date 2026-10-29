@@ -3,6 +3,7 @@ import { Alert, Button, Card, Form, Select, Table } from 'antd'
 import dayjs from 'dayjs'
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router'
+import Clip from '../../components/Clip'
 import FilterCard, { FCol } from '../../components/FilterCard'
 import { StatusTag } from '../../components/Tags'
 import { useApi, useFilters, useOptions } from '../../hooks'
@@ -40,15 +41,14 @@ export default function WeeklyList() {
       </FilterCard>
       {state.error && <Alert type="error" showIcon title={state.error.message} className="mb16" />}
       <Card>
-        <Table<Weekly> rowKey="id" loading={state.loading} dataSource={state.data?.rows} pagination={pagination}
-          scroll={{ x: 'max-content' }} locale={{ emptyText: '暂无周报' }}
+        <Table<Weekly> rowKey="id" loading={state.loading} dataSource={state.data?.rows} pagination={pagination} locale={{ emptyText: '暂无周报' }}
           columns={[
             {
               title: '周次', dataIndex: 'week_start', width: 190,
               render: (v: string, w) => <Link to={`/weekly/${w.id}`}>{v} ~ {weekEnd(v).slice(5)}</Link>,
             },
             { title: '销售员', dataIndex: 'sales' },
-            { title: '本周总结', dataIndex: 'summary', ellipsis: true, width: 420 },
+            { title: '本周总结', dataIndex: 'summary', render: (v) => <Clip text={v} width={420} /> },
             { title: '状态', dataIndex: 'status', render: (s) => <StatusTag status={s} /> },
             { title: '更新时间', dataIndex: 'updated_at', responsive: ['md'], render: (v) => <span className="hint">{v}</span> },
           ]} />

@@ -75,7 +75,7 @@ export default function TripDetail() {
                 ]} />
             </Card>
             <Card title={`拜访明细（${d.visits.length}）`}>
-              <Table<Visit> rowKey="id" dataSource={d.visits} pagination={false} scroll={{ x: 'max-content' }}
+              <Table<Visit> rowKey="id" dataSource={d.visits} pagination={false}
                 locale={{
                   emptyText: <>还没有拜访记录{editable && <>，<a role="button" onClick={() => setDialog('visit')}>现在添加</a></>}</>,
                 }}
