@@ -1,6 +1,6 @@
-"""销售周报 / 客户拜访 / 出差报告 管理系统
+"""销售周报 / 客户拜访 / 出差报告 管理系统 (后端 JSON 接口 + 托管 React 前端)
 
-运行:  python app.py            (开发)
+运行:  python app.py            (开发, 前端另行 cd frontend && npm run dev)
        python serve.py          (生产, waitress)
 """
 import calendar
@@ -15,17 +15,18 @@ from collections import Counter, defaultdict
 from datetime import date, datetime, timedelta
 from functools import wraps
 
-from flask import (Flask, abort, flash, g, jsonify, redirect, render_template,
-                   request, send_file, session, url_for)
+from flask import Flask, abort, g, jsonify, request, send_file, send_from_directory, session
+from werkzeug.exceptions import HTTPException
 from werkzeug.security import check_password_hash, generate_password_hash
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.environ.get("SALES_DB", os.path.join(BASE_DIR, "data", "sales.db"))
+DIST_DIR = os.path.join(BASE_DIR, "frontend", "dist")
 
-app = Flask(__name__)
+app = Flask(__name__, static_folder=None)
 app.config.update(
     SECRET_KEY=os.environ.get("SECRET_KEY") or "dev-only-change-me",
-    PERMANENT_SESSION_LIFETIME=timedelta(hours=12),
+    PERMANENT_SESSION_LIFETIME=timedelta(days=7),  # 勾选"记住我"的登录有效期
     SESSION_COOKIE_HTTPONLY=True,
     SESSION_COOKIE_SAMESITE="Lax",
     SESSION_COOKIE_SECURE=os.environ.get("COOKIE_SECURE") == "1",  # 启用 HTTPS 后设为 1
@@ -97,10 +98,34 @@ def execute(sql, args=()):
     return cur.lastrowid
 
 
+def dicts(rows):
+    return [dict(r) for r in rows]
+
+
 def audit(action, detail=""):
     uid = g.user["id"] if g.get("user") else None
     execute("INSERT INTO audit_log (user_id, action, detail, ip) VALUES (?,?,?,?)",
             (uid, action, detail, request.remote_addr or ""))
+
+
+# ---------------------------------------------------------------- 接口约定
+
+def ok(message="", **data):
+    return jsonify(ok=True, message=message, **data)
+
+
+def fail(*errors, status=400, **data):
+    return jsonify(error="；".join(errors), **data), status
+
+
+ERROR_MSGS = {400: "请求无效", 401: "请先登录", 403: "没有权限执行该操作", 404: "页面或记录不存在",
+              405: "请求方式不支持"}
+
+
+@app.errorhandler(HTTPException)
+def http_error(e):
+    custom = e.description != type(e).description
+    return jsonify(error=e.description if custom else ERROR_MSGS.get(e.code, e.name)), e.code
 
 
 # ---------------------------------------------------------------- 权限
@@ -115,32 +140,26 @@ def load_user():
             g.user = user
         else:
             session.clear()
-    if request.method == "POST":
-        token = request.form.get("_csrf") or request.headers.get("X-CSRF-Token")
+    if request.method not in ("GET", "HEAD", "OPTIONS"):
+        token = request.headers.get("X-CSRF-Token")
         if not token or token != session.get("_csrf"):
-            abort(400, "表单已过期, 请刷新页面后重试")
+            abort(400, "页面已过期, 请刷新页面后重试")
     if g.user and g.user["must_change_pw"] and request.endpoint not in (
-            "change_password", "logout", "static"):
-        flash("首次登录或密码被重置, 请先修改密码", "warn")
-        return redirect(url_for("change_password"))
+            "session_info", "change_password", "logout", "spa"):
+        return fail("首次登录或密码被重置, 请先修改密码", status=403, code="must_change_pw")
 
 
-@app.context_processor
-def inject():
+def csrf_token():
     if "_csrf" not in session:
         session["_csrf"] = secrets.token_hex(16)
-    pending = 0
-    if g.get("user") and g.user["role"] in ("manager", "admin"):
-        pending = count_pending_approvals()
-    return dict(csrf=session["_csrf"], ROLES=ROLES, STATUS=STATUS, me=g.get("user"),
-                pending_count=pending, today=date.today().isoformat())
+    return session["_csrf"]
 
 
 def login_required(view):
     @wraps(view)
     def wrapped(*a, **kw):
         if not g.user:
-            return redirect(url_for("login", next=request.path))
+            abort(401)
         return view(*a, **kw)
     return wrapped
 
@@ -216,15 +235,27 @@ def count_pending_approvals():
 
 # ---------------------------------------------------------------- 工具函数
 
+def body():
+    return request.get_json(silent=True) or {}
+
+
 def f_str(name, default=""):
-    return (request.form.get(name) or default).strip()
+    v = body().get(name)
+    return str(v).strip() if v not in (None, "") else default
 
 
 def f_num(name):
     try:
-        return round(float(request.form.get(name) or 0), 2)
-    except ValueError:
+        return round(float(body().get(name) or 0), 2)
+    except (TypeError, ValueError):
         return 0.0
+
+
+def f_int(name):
+    try:
+        return int(body().get(name))
+    except (TypeError, ValueError):
+        return None
 
 
 def parse_date(s, default=None):
@@ -249,8 +280,8 @@ def week_monday(d):
 
 
 def approvals_for(target_type, target_id):
-    return q("SELECT a.*, u.name approver FROM approvals a JOIN users u ON u.id=a.approver_id "
-             "WHERE target_type=? AND target_id=? ORDER BY a.id", (target_type, target_id))
+    return dicts(q("SELECT a.*, u.name approver FROM approvals a JOIN users u ON u.id=a.approver_id "
+                   "WHERE target_type=? AND target_id=? ORDER BY a.id", (target_type, target_id)))
 
 
 def active_customers():
@@ -258,78 +289,86 @@ def active_customers():
              "WHERE c.status='active' ORDER BY c.level, c.name")
 
 
-@app.template_filter("money")
-def money(v):
-    return f"{(v or 0):,.2f}"
+def customer_options():
+    return [{k: c[k] for k in ("id", "name", "level", "region")} for c in active_customers()]
 
 
-@app.template_filter("nl2br")
-def nl2br(s):
-    from markupsafe import Markup, escape
-    return Markup("<br>".join(escape(s or "").split("\n")))
+def owner_options():
+    return dicts(q("SELECT id, name FROM users WHERE role IN ('sales','manager') AND active=1 ORDER BY name"))
 
 
-# ---------------------------------------------------------------- 登录
+def user_brief(u):
+    return {k: u[k] for k in ("id", "username", "name", "role", "must_change_pw")}
+
+
+# ---------------------------------------------------------------- 登录 / 会话
 
 _login_fail = defaultdict(list)
 
 
-@app.route("/login", methods=["GET", "POST"])
+@app.route("/api/session")
+def session_info():
+    u = g.user
+    return jsonify(csrf=csrf_token(), user=user_brief(u) if u else None,
+                   pending_count=count_pending_approvals() if u and is_manager() else 0,
+                   roles=ROLES, status=STATUS, visit_types=VISIT_TYPES, stages=STAGES,
+                   today=date.today().isoformat())
+
+
+@app.route("/api/login", methods=["POST"])
 def login():
-    if request.method == "POST":
-        ip = request.remote_addr or "?"
-        now = time.time()
-        _login_fail[ip] = [t for t in _login_fail[ip] if now - t < 600]
-        if len(_login_fail[ip]) >= 5:
-            flash("登录失败次数过多, 请 10 分钟后再试", "error")
-            return render_template("login.html")
-        user = q("SELECT * FROM users WHERE username=? AND active=1",
-                 (f_str("username"),), one=True)
-        if user and check_password_hash(user["password_hash"], request.form.get("password", "")):
-            _login_fail.pop(ip, None)
-            session.clear()
-            session.permanent = True
-            session["uid"] = user["id"]
-            g.user = user
-            audit("登录")
-            nxt = request.args.get("next", "")
-            return redirect(nxt if nxt.startswith("/") and not nxt.startswith("//") else url_for("index"))
-        _login_fail[ip].append(now)
-        flash("用户名或密码错误", "error")
-    return render_template("login.html")
+    ip = request.remote_addr or "?"
+    now = time.time()
+    _login_fail[ip] = [t for t in _login_fail[ip] if now - t < 600]
+    if len(_login_fail[ip]) >= 5:
+        return fail("登录失败次数过多, 请 10 分钟后再试")
+    user = q("SELECT * FROM users WHERE username=? AND active=1", (f_str("username"),), one=True)
+    if user and check_password_hash(user["password_hash"], str(body().get("password") or "")):
+        _login_fail.pop(ip, None)
+        session.clear()
+        session.permanent = bool(body().get("remember"))  # 不勾选"记住我"时关闭浏览器即退出
+        session["uid"] = user["id"]
+        g.user = user
+        audit("登录")
+        return ok(csrf=csrf_token(), user=user_brief(user))
+    _login_fail[ip].append(now)
+    return fail("用户名或密码错误")
 
 
-@app.route("/logout")
+@app.route("/api/logout", methods=["POST"])
 def logout():
     session.clear()
-    return redirect(url_for("login"))
+    return ok(csrf=csrf_token())
 
 
-@app.route("/password", methods=["GET", "POST"])
+@app.route("/api/password", methods=["POST"])
 @login_required
 def change_password():
-    if request.method == "POST":
-        old, new, new2 = (request.form.get(k, "") for k in ("old", "new", "new2"))
-        if not check_password_hash(g.user["password_hash"], old):
-            flash("原密码错误", "error")
-        elif len(new) < 8 or new.isdigit() or new.isalpha():
-            flash("新密码至少 8 位, 且需同时包含字母和数字", "error")
-        elif new != new2:
-            flash("两次输入的新密码不一致", "error")
-        else:
-            execute("UPDATE users SET password_hash=?, must_change_pw=0 WHERE id=?",
-                    (generate_password_hash(new), g.user["id"]))
-            audit("修改密码")
-            flash("密码已修改", "ok")
-            return redirect(url_for("index"))
-    return render_template("password.html")
+    old, new, new2 = (str(body().get(k) or "") for k in ("old", "new", "new2"))
+    if not check_password_hash(g.user["password_hash"], old):
+        return fail("原密码错误")
+    if len(new) < 8 or new.isdigit() or new.isalpha():
+        return fail("新密码至少 8 位, 且需同时包含字母和数字")
+    if new != new2:
+        return fail("两次输入的新密码不一致")
+    execute("UPDATE users SET password_hash=?, must_change_pw=0 WHERE id=?",
+            (generate_password_hash(new), g.user["id"]))
+    audit("修改密码")
+    return ok("密码已修改")
+
+
+@app.route("/api/options")
+@login_required
+def options():
+    return jsonify(users=[{"id": u["id"], "name": u["name"]} for u in visible_users()],
+                   customers=customer_options(), owners=owner_options())
 
 
 # ---------------------------------------------------------------- 首页
 
-@app.route("/")
+@app.route("/api/dashboard")
 @login_required
-def index():
+def dashboard():
     today = date.today()
     month = today.strftime("%Y-%m")
     first, last = month_range(month)
@@ -356,13 +395,11 @@ def index():
                  f"UNION ALL SELECT 'weekly', id, week_start, '周报' FROM weekly_reports WHERE user_id=? AND status='rejected' "
                  f"UNION ALL SELECT 'monthly', id, month, '月度报告' FROM monthly_reports WHERE user_id=? AND status='rejected'",
                  (g.user["id"],) * 3)
-    links = {"trip": ("出差报告", "trip_detail", "tid"), "weekly": ("周报", "weekly_detail", "wid"),
-             "monthly": ("月度报告", "monthly_detail", "mid")}
-    rejected = [{"label": links[r["t"]][0], "d": r["d"], "title": r["title"],
-                 "url": url_for(links[r["t"]][1], **{links[r["t"]][2]: r["id"]})} for r in rejected]
-    return render_template("index.html", month=month, mv=month_visits, mt=month_trips,
-                           recent=recent, followups=followups, has_weekly=has_weekly,
-                           this_week=this_week, rejected=rejected)
+    rejected = [{"type": r["t"], "id": r["id"], "label": TARGETS[r["t"]][1], "d": r["d"], "title": r["title"]}
+                for r in rejected]
+    return jsonify(month=month, visits=dict(month_visits), trips=dict(month_trips),
+                   recent=dicts(recent), followups=dicts(followups), this_week=this_week,
+                   weekly=dict(has_weekly) if has_weekly else None, rejected=rejected)
 
 
 # ---------------------------------------------------------------- 客户拜访
@@ -392,13 +429,12 @@ VISIT_SELECT = ("SELECT v.*, c.name customer, c.level, u.name sales, t.destinati
                 "LEFT JOIN trips t ON t.id=v.trip_id ")
 
 
-@app.route("/visits")
+@app.route("/api/visits")
 @login_required
 def visits():
     where, args = visit_filters()
     rows = q(f"{VISIT_SELECT} WHERE {where} ORDER BY v.visit_date DESC, v.id DESC LIMIT 500", args)
-    return render_template("visits.html", rows=rows, users=visible_users(),
-                           customers=active_customers(), types=VISIT_TYPES, a=request.args)
+    return jsonify(rows=dicts(rows))
 
 
 def visit_editable(v):
@@ -416,92 +452,89 @@ def my_open_trips(include_id=None):
              "ORDER BY start_date DESC LIMIT 30", (g.user["id"], include_id or 0))
 
 
-@app.route("/visits/new", methods=["GET", "POST"])
-@app.route("/visits/<int:vid>/edit", methods=["GET", "POST"])
+def editable_visit(vid):
+    v = q("SELECT * FROM visits WHERE id=?", (vid,), one=True)
+    check_owner(v)
+    if not visit_editable(v):
+        abort(403, "该记录已随出差报告提交, 不能修改")
+    return v
+
+
+@app.route("/api/visits/form")
 @login_required
-def visit_form(vid=None):
-    v = None
-    if vid:
-        v = q("SELECT * FROM visits WHERE id=?", (vid,), one=True)
-        check_owner(v)
-        if not visit_editable(v):
-            flash("该记录已随出差报告提交, 不能修改", "error")
-            return redirect(url_for("visit_detail", vid=vid))
-    if request.method == "POST":
-        cid = request.form.get("customer_id", type=int)
-        cust = q("SELECT * FROM customers WHERE id=? AND status='active'", (cid,), one=True)
-        vdate = parse_date(f_str("visit_date"))
-        errors = []
-        if not cust:
-            errors.append("请从客户名单中选择客户")
-        if not vdate:
-            errors.append("请填写拜访日期")
-        elif vdate > date.today():
-            errors.append("拜访日期不能晚于今天")
-        if not f_str("contact_name"):
-            errors.append("请填写洽谈人员")
-        if len(f_str("content")) < 10:
-            errors.append("洽谈内容至少 10 个字")
-        trip_id = request.form.get("trip_id", type=int)
-        if trip_id:
-            trip = q("SELECT * FROM trips WHERE id=? AND user_id=?", (trip_id, g.user["id"]), one=True)
-            if not trip:
-                trip_id = None
-            elif vdate and not (trip["start_date"] <= vdate.isoformat() <= trip["end_date"]):
-                errors.append(f"拜访日期不在所选出差行程 ({trip['start_date']} ~ {trip['end_date']}) 内")
-        if errors:
-            for e in errors:
-                flash(e, "error")
-        else:
-            data = (cid, trip_id, vdate.isoformat(), f_str("start_time"), f_str("end_time"),
-                    f_str("visit_type", "回访"), f_str("contact_name"), f_str("contact_title"),
-                    f_str("contact_phone"), f_str("attendees"), f_str("content"), f_str("result"),
-                    f_str("stage"), f_num("amount"), f_str("next_step"), f_str("next_date"))
-            cols = ("customer_id, trip_id, visit_date, start_time, end_time, visit_type, contact_name, "
-                    "contact_title, contact_phone, attendees, content, result, stage, amount, next_step, next_date")
-            if v:
-                sets = ", ".join(f"{c.strip()}=?" for c in cols.split(","))
-                execute(f"UPDATE visits SET {sets} WHERE id=?", data + (vid,))
-                audit("修改拜访", f"#{vid}")
-            else:
-                vid = execute(f"INSERT INTO visits (user_id, {cols}) VALUES (?{',?' * len(data)})",
-                              (g.user["id"],) + data)
-                audit("新增拜访", f"#{vid} {cust['name']}")
-            # 自动沉淀客户联系人
-            execute("INSERT INTO contacts (customer_id, name, title, phone) VALUES (?,?,?,?) "
-                    "ON CONFLICT(customer_id, name) DO UPDATE SET "
-                    "title=COALESCE(NULLIF(excluded.title,''), title), "
-                    "phone=COALESCE(NULLIF(excluded.phone,''), phone)",
-                    (cid, f_str("contact_name"), f_str("contact_title"), f_str("contact_phone")))
-            flash("拜访记录已保存", "ok")
-            if request.form.get("again"):
-                return redirect(url_for("visit_form", trip_id=trip_id or ""))
-            return redirect(url_for("visit_detail", vid=vid))
-    form = request.form if request.method == "POST" else (v or {})
-    return render_template("visit_form.html", v=v, form=form, customers=active_customers(),
-                           trips=my_open_trips(v["trip_id"] if v else None), types=VISIT_TYPES,
-                           stages=STAGES, preset_trip=request.args.get("trip_id", type=int))
+def visit_form_data():
+    vid = request.args.get("id", type=int)
+    v = editable_visit(vid) if vid else None
+    return jsonify(visit=dict(v) if v else None, customers=customer_options(),
+                   trips=dicts(my_open_trips(v["trip_id"] if v else None)))
 
 
-@app.route("/visits/<int:vid>")
+@app.route("/api/visits", methods=["POST"])
+@app.route("/api/visits/<int:vid>", methods=["PUT"])
+@login_required
+def visit_save(vid=None):
+    v = editable_visit(vid) if vid else None
+    cid = f_int("customer_id")
+    cust = q("SELECT * FROM customers WHERE id=? AND status='active'", (cid,), one=True)
+    vdate = parse_date(f_str("visit_date"))
+    errors = []
+    if not cust:
+        errors.append("请从客户名单中选择客户")
+    if not vdate:
+        errors.append("请填写拜访日期")
+    elif vdate > date.today():
+        errors.append("拜访日期不能晚于今天")
+    if not f_str("contact_name"):
+        errors.append("请填写洽谈人员")
+    if len(f_str("content")) < 10:
+        errors.append("洽谈内容至少 10 个字")
+    trip_id = f_int("trip_id")
+    if trip_id:
+        trip = q("SELECT * FROM trips WHERE id=? AND user_id=?", (trip_id, g.user["id"]), one=True)
+        if not trip:
+            trip_id = None
+        elif vdate and not (trip["start_date"] <= vdate.isoformat() <= trip["end_date"]):
+            errors.append(f"拜访日期不在所选出差行程 ({trip['start_date']} ~ {trip['end_date']}) 内")
+    if errors:
+        return fail(*errors)
+    data = (cid, trip_id, vdate.isoformat(), f_str("start_time"), f_str("end_time"),
+            f_str("visit_type", "回访"), f_str("contact_name"), f_str("contact_title"),
+            f_str("contact_phone"), f_str("attendees"), f_str("content"), f_str("result"),
+            f_str("stage"), f_num("amount"), f_str("next_step"), f_str("next_date"))
+    cols = ("customer_id, trip_id, visit_date, start_time, end_time, visit_type, contact_name, "
+            "contact_title, contact_phone, attendees, content, result, stage, amount, next_step, next_date")
+    if v:
+        sets = ", ".join(f"{c.strip()}=?" for c in cols.split(","))
+        execute(f"UPDATE visits SET {sets} WHERE id=?", data + (vid,))
+        audit("修改拜访", f"#{vid}")
+    else:
+        vid = execute(f"INSERT INTO visits (user_id, {cols}) VALUES (?{',?' * len(data)})",
+                      (g.user["id"],) + data)
+        audit("新增拜访", f"#{vid} {cust['name']}")
+    # 自动沉淀客户联系人
+    execute("INSERT INTO contacts (customer_id, name, title, phone) VALUES (?,?,?,?) "
+            "ON CONFLICT(customer_id, name) DO UPDATE SET "
+            "title=COALESCE(NULLIF(excluded.title,''), title), "
+            "phone=COALESCE(NULLIF(excluded.phone,''), phone)",
+            (cid, f_str("contact_name"), f_str("contact_title"), f_str("contact_phone")))
+    return ok("拜访记录已保存", id=vid)
+
+
+@app.route("/api/visits/<int:vid>")
 @login_required
 def visit_detail(vid):
     v = q(f"{VISIT_SELECT} WHERE v.id=?", (vid,), one=True)
     check_owner(v)
-    return render_template("visit_detail.html", v=v, editable=visit_editable(v))
+    return jsonify(visit=dict(v), editable=visit_editable(v))
 
 
-@app.route("/visits/<int:vid>/delete", methods=["POST"])
+@app.route("/api/visits/<int:vid>", methods=["DELETE"])
 @login_required
 def visit_delete(vid):
-    v = q("SELECT * FROM visits WHERE id=?", (vid,), one=True)
-    check_owner(v)
-    if not visit_editable(v):
-        abort(403)
+    editable_visit(vid)
     execute("DELETE FROM visits WHERE id=?", (vid,))
     audit("删除拜访", f"#{vid}")
-    flash("已删除", "ok")
-    return redirect(url_for("visits"))
+    return ok("已删除")
 
 
 @app.route("/api/contacts")
@@ -509,7 +542,7 @@ def visit_delete(vid):
 def api_contacts():
     cid = request.args.get("customer_id", type=int)
     rows = q("SELECT name, title, phone FROM contacts WHERE customer_id=? ORDER BY name", (cid,))
-    return jsonify([dict(r) for r in rows])
+    return jsonify(dicts(rows))
 
 
 # ---------------------------------------------------------------- 出差报告
@@ -518,16 +551,16 @@ def trip_cost(t):
     return t["cost_transport"] + t["cost_hotel"] + t["cost_meal"] + t["cost_other"]
 
 
-app.jinja_env.globals["trip_cost"] = trip_cost
-
-
-@app.route("/trips")
+@app.route("/api/trips")
 @login_required
 def trips():
     sql, args = scope("t.user_id")
     where, wargs = "", []
     if request.args.get("month"):
-        first, last = month_range(request.args["month"])
+        try:
+            first, last = month_range(request.args["month"])
+        except ValueError:
+            abort(400, "月份格式不正确")
         where = " AND start_date <= ? AND end_date >= ?"
         wargs = [last.isoformat(), first.isoformat()]
     if request.args.get("user_id"):
@@ -540,71 +573,62 @@ def trips():
              f"CAST(julianday(end_date) - julianday(start_date) + 1 AS INTEGER) days "
              f"FROM trips t JOIN users u ON u.id=t.user_id WHERE 1=1 {sql}{where} "
              f"ORDER BY start_date DESC LIMIT 300", args + wargs)
-    return render_template("trips.html", rows=rows, users=visible_users(), a=request.args)
+    return jsonify(rows=dicts(rows))
 
 
-@app.route("/trips/new", methods=["GET", "POST"])
-@app.route("/trips/<int:tid>/edit", methods=["GET", "POST"])
+@app.route("/api/trips", methods=["POST"])
+@app.route("/api/trips/<int:tid>", methods=["PUT"])
 @login_required
-def trip_form(tid=None):
-    t = None
+def trip_save(tid=None):
     if tid:
         t = q("SELECT * FROM trips WHERE id=?", (tid,), one=True)
         check_owner(t)
         if t["user_id"] != g.user["id"] or t["status"] not in ("draft", "rejected"):
-            flash("已提交或已审批的出差报告不能修改", "error")
-            return redirect(url_for("trip_detail", tid=tid))
-    if request.method == "POST":
-        sd, ed = parse_date(f_str("start_date")), parse_date(f_str("end_date"))
-        errors = []
-        if not sd or not ed:
-            errors.append("请填写出差起止日期")
-        elif ed < sd:
-            errors.append("结束日期不能早于开始日期")
-        if not f_str("destination"):
-            errors.append("请填写出差地点")
-        if sd and ed and not errors:
-            overlap = q("SELECT id FROM trips WHERE user_id=? AND id!=? AND start_date<=? AND end_date>=?",
-                        (g.user["id"], tid or 0, ed.isoformat(), sd.isoformat()), one=True)
-            if overlap:
-                errors.append("与已有出差行程时间重叠")
-        if errors:
-            for e in errors:
-                flash(e, "error")
-        else:
-            submit = request.form.get("action") == "submit"
-            data = (sd.isoformat(), ed.isoformat(), f_str("destination"), f_str("purpose"),
-                    f_str("transport"), f_num("cost_transport"), f_num("cost_hotel"),
-                    f_num("cost_meal"), f_num("cost_other"), f_str("summary"),
-                    "submitted" if submit else "draft")
-            if t:
-                execute("UPDATE trips SET start_date=?, end_date=?, destination=?, purpose=?, transport=?, "
-                        "cost_transport=?, cost_hotel=?, cost_meal=?, cost_other=?, summary=?, status=?, "
-                        "updated_at=datetime('now','localtime') WHERE id=?", data + (tid,))
-            else:
-                tid = execute("INSERT INTO trips (user_id, start_date, end_date, destination, purpose, transport, "
-                              "cost_transport, cost_hotel, cost_meal, cost_other, summary, status) "
-                              "VALUES (?,?,?,?,?,?,?,?,?,?,?,?)", (g.user["id"],) + data)
-            audit("提交出差报告" if submit else "保存出差报告", f"#{tid}")
-            flash("出差报告已提交, 等待主管审批" if submit else "已保存草稿, 可继续添加拜访记录", "ok")
-            return redirect(url_for("trip_detail", tid=tid))
-    form = request.form if request.method == "POST" else (t or {})
-    return render_template("trip_form.html", t=t, form=form)
+            abort(403, "已提交或已审批的出差报告不能修改")
+    sd, ed = parse_date(f_str("start_date")), parse_date(f_str("end_date"))
+    errors = []
+    if not sd or not ed:
+        errors.append("请填写出差起止日期")
+    elif ed < sd:
+        errors.append("结束日期不能早于开始日期")
+    if not f_str("destination"):
+        errors.append("请填写出差地点")
+    if sd and ed and not errors:
+        overlap = q("SELECT id FROM trips WHERE user_id=? AND id!=? AND start_date<=? AND end_date>=?",
+                    (g.user["id"], tid or 0, ed.isoformat(), sd.isoformat()), one=True)
+        if overlap:
+            errors.append("与已有出差行程时间重叠")
+    if errors:
+        return fail(*errors)
+    submit = f_str("action") == "submit"
+    data = (sd.isoformat(), ed.isoformat(), f_str("destination"), f_str("purpose"),
+            f_str("transport"), f_num("cost_transport"), f_num("cost_hotel"),
+            f_num("cost_meal"), f_num("cost_other"), f_str("summary"),
+            "submitted" if submit else "draft")
+    if tid:
+        execute("UPDATE trips SET start_date=?, end_date=?, destination=?, purpose=?, transport=?, "
+                "cost_transport=?, cost_hotel=?, cost_meal=?, cost_other=?, summary=?, status=?, "
+                "updated_at=datetime('now','localtime') WHERE id=?", data + (tid,))
+    else:
+        tid = execute("INSERT INTO trips (user_id, start_date, end_date, destination, purpose, transport, "
+                      "cost_transport, cost_hotel, cost_meal, cost_other, summary, status) "
+                      "VALUES (?,?,?,?,?,?,?,?,?,?,?,?)", (g.user["id"],) + data)
+    audit("提交出差报告" if submit else "保存出差报告", f"#{tid}")
+    return ok("出差报告已提交, 等待主管审批" if submit else "已保存草稿, 可继续添加拜访记录", id=tid)
 
 
-@app.route("/trips/<int:tid>")
+@app.route("/api/trips/<int:tid>")
 @login_required
 def trip_detail(tid):
     t = q("SELECT t.*, u.name sales FROM trips t JOIN users u ON u.id=t.user_id WHERE t.id=?", (tid,), one=True)
     check_owner(t)
     vs = q(f"{VISIT_SELECT} WHERE v.trip_id=? ORDER BY visit_date, start_time", (tid,))
-    return render_template("trip_detail.html", t=t, visits=vs, approvals=approvals_for("trip", tid),
-                           can_approve=can_approve(t["user_id"]) and t["status"] == "submitted",
-                           can_comment=can_approve(t["user_id"]),
-                           mine=t["user_id"] == g.user["id"])
+    return jsonify(trip=dict(t), visits=dicts(vs), approvals=approvals_for("trip", tid),
+                   can_approve=can_approve(t["user_id"]) and t["status"] == "submitted",
+                   can_comment=can_approve(t["user_id"]), mine=t["user_id"] == g.user["id"])
 
 
-@app.route("/trips/<int:tid>/submit", methods=["POST"])
+@app.route("/api/trips/<int:tid>/submit", methods=["POST"])
 @login_required
 def trip_submit(tid):
     t = q("SELECT * FROM trips WHERE id=? AND user_id=?", (tid, g.user["id"]), one=True)
@@ -612,11 +636,10 @@ def trip_submit(tid):
         abort(403)
     execute("UPDATE trips SET status='submitted', updated_at=datetime('now','localtime') WHERE id=?", (tid,))
     audit("提交出差报告", f"#{tid}")
-    flash("已提交, 等待主管审批", "ok")
-    return redirect(url_for("trip_detail", tid=tid))
+    return ok("已提交, 等待主管审批")
 
 
-@app.route("/trips/<int:tid>/delete", methods=["POST"])
+@app.route("/api/trips/<int:tid>", methods=["DELETE"])
 @login_required
 def trip_delete(tid):
     t = q("SELECT * FROM trips WHERE id=? AND user_id=?", (tid, g.user["id"]), one=True)
@@ -625,13 +648,12 @@ def trip_delete(tid):
     execute("UPDATE visits SET trip_id=NULL WHERE trip_id=?", (tid,))
     execute("DELETE FROM trips WHERE id=?", (tid,))
     audit("删除出差报告", f"#{tid}")
-    flash("出差报告已删除 (其中的拜访记录已保留)", "ok")
-    return redirect(url_for("trips"))
+    return ok("出差报告已删除 (其中的拜访记录已保留)")
 
 
 # ---------------------------------------------------------------- 周报
 
-@app.route("/weekly")
+@app.route("/api/weekly")
 @login_required
 def weekly():
     sql, args = scope("w.user_id")
@@ -641,76 +663,77 @@ def weekly():
         eargs = [request.args["user_id"]]
     rows = q(f"SELECT w.*, u.name sales FROM weekly_reports w JOIN users u ON u.id=w.user_id "
              f"WHERE 1=1 {sql}{extra} ORDER BY week_start DESC, u.name LIMIT 300", args + eargs)
-    return render_template("weekly.html", rows=rows, users=visible_users(), a=request.args,
-                           timedelta=timedelta, parse_date=parse_date)
+    return jsonify(rows=dicts(rows))
 
 
 def week_visits(user_id, monday):
-    return q(f"{VISIT_SELECT} WHERE v.user_id=? AND v.visit_date BETWEEN ? AND ? ORDER BY visit_date",
-             (user_id, monday.isoformat(), (monday + timedelta(days=6)).isoformat()))
+    return dicts(q(f"{VISIT_SELECT} WHERE v.user_id=? AND v.visit_date BETWEEN ? AND ? ORDER BY visit_date",
+                   (user_id, monday.isoformat(), (monday + timedelta(days=6)).isoformat())))
 
 
-@app.route("/weekly/new", methods=["GET", "POST"])
-@app.route("/weekly/<int:wid>/edit", methods=["GET", "POST"])
+def editable_weekly(wid):
+    w = q("SELECT * FROM weekly_reports WHERE id=?", (wid,), one=True)
+    check_owner(w)
+    if w["user_id"] != g.user["id"] or w["status"] not in ("draft", "rejected"):
+        abort(403, "已提交或已审批的周报不能修改")
+    return w
+
+
+@app.route("/api/weekly/form")
 @login_required
-def weekly_form(wid=None):
-    w = None
-    if wid:
-        w = q("SELECT * FROM weekly_reports WHERE id=?", (wid,), one=True)
-        check_owner(w)
-        if w["user_id"] != g.user["id"] or w["status"] not in ("draft", "rejected"):
-            flash("已提交或已审批的周报不能修改", "error")
-            return redirect(url_for("weekly_detail", wid=wid))
-    monday = week_monday(parse_date(request.values.get("week") or (w["week_start"] if w else ""),
-                                    date.today()))
-    if request.method == "POST":
-        if len(f_str("summary")) < 10:
-            flash("本周工作总结至少 10 个字", "error")
-        else:
-            dup = q("SELECT id FROM weekly_reports WHERE user_id=? AND week_start=? AND id!=?",
-                    (g.user["id"], monday.isoformat(), wid or 0), one=True)
-            if dup:
-                flash("该周的周报已存在, 已为你打开", "warn")
-                return redirect(url_for("weekly_detail", wid=dup["id"]))
-            status = "submitted" if request.form.get("action") == "submit" else "draft"
-            data = (monday.isoformat(), f_str("summary"), f_str("problems"), f_str("next_plan"), status)
-            if w:
-                execute("UPDATE weekly_reports SET week_start=?, summary=?, problems=?, next_plan=?, status=?, "
-                        "updated_at=datetime('now','localtime') WHERE id=?", data + (wid,))
-            else:
-                wid = execute("INSERT INTO weekly_reports (user_id, week_start, summary, problems, next_plan, status) "
-                              "VALUES (?,?,?,?,?,?)", (g.user["id"],) + data)
-            audit("提交周报" if status == "submitted" else "保存周报", monday.isoformat())
-            flash("周报已提交" if status == "submitted" else "周报草稿已保存", "ok")
-            return redirect(url_for("weekly_detail", wid=wid))
-    form = request.form if request.method == "POST" else (w or {})
-    return render_template("weekly_form.html", w=w, form=form, monday=monday,
-                           sunday=monday + timedelta(days=6), visits=week_visits(g.user["id"], monday))
+def weekly_form_data():
+    wid = request.args.get("id", type=int)
+    w = editable_weekly(wid) if wid else None
+    monday = week_monday(parse_date(request.args.get("week") or (w["week_start"] if w else ""), date.today()))
+    return jsonify(report=dict(w) if w else None, monday=monday.isoformat(),
+                   sunday=(monday + timedelta(days=6)).isoformat(), visits=week_visits(g.user["id"], monday))
 
 
-@app.route("/weekly/<int:wid>")
+@app.route("/api/weekly", methods=["POST"])
+@app.route("/api/weekly/<int:wid>", methods=["PUT"])
+@login_required
+def weekly_save(wid=None):
+    w = editable_weekly(wid) if wid else None
+    monday = week_monday(parse_date(f_str("week") or (w["week_start"] if w else ""), date.today()))
+    if len(f_str("summary")) < 10:
+        return fail("本周工作总结至少 10 个字")
+    dup = q("SELECT id FROM weekly_reports WHERE user_id=? AND week_start=? AND id!=?",
+            (g.user["id"], monday.isoformat(), wid or 0), one=True)
+    if dup:
+        return fail("该周的周报已存在, 已为你打开", status=409, dup_id=dup["id"])
+    status = "submitted" if f_str("action") == "submit" else "draft"
+    data = (monday.isoformat(), f_str("summary"), f_str("problems"), f_str("next_plan"), status)
+    if w:
+        execute("UPDATE weekly_reports SET week_start=?, summary=?, problems=?, next_plan=?, status=?, "
+                "updated_at=datetime('now','localtime') WHERE id=?", data + (wid,))
+    else:
+        wid = execute("INSERT INTO weekly_reports (user_id, week_start, summary, problems, next_plan, status) "
+                      "VALUES (?,?,?,?,?,?)", (g.user["id"],) + data)
+    audit("提交周报" if status == "submitted" else "保存周报", monday.isoformat())
+    return ok("周报已提交" if status == "submitted" else "周报草稿已保存", id=wid)
+
+
+@app.route("/api/weekly/<int:wid>")
 @login_required
 def weekly_detail(wid):
     w = q("SELECT w.*, u.name sales FROM weekly_reports w JOIN users u ON u.id=w.user_id WHERE w.id=?",
           (wid,), one=True)
     check_owner(w)
     monday = parse_date(w["week_start"])
-    return render_template("weekly_detail.html", w=w, sunday=monday + timedelta(days=6),
-                           visits=week_visits(w["user_id"], monday),
-                           approvals=approvals_for("weekly", wid),
-                           can_approve=can_approve(w["user_id"]) and w["status"] == "submitted",
-                           can_comment=can_approve(w["user_id"]), mine=w["user_id"] == g.user["id"])
+    return jsonify(report=dict(w), sunday=(monday + timedelta(days=6)).isoformat(),
+                   visits=week_visits(w["user_id"], monday), approvals=approvals_for("weekly", wid),
+                   can_approve=can_approve(w["user_id"]) and w["status"] == "submitted",
+                   can_comment=can_approve(w["user_id"]), mine=w["user_id"] == g.user["id"])
 
 
-@app.route("/weekly/<int:wid>/submit", methods=["POST"])
+@app.route("/api/weekly/<int:wid>/submit", methods=["POST"])
 @login_required
 def weekly_submit(wid):
     w = q("SELECT * FROM weekly_reports WHERE id=? AND user_id=?", (wid, g.user["id"]), one=True)
     if not w or w["status"] not in ("draft", "rejected"):
         abort(403)
     execute("UPDATE weekly_reports SET status='submitted', updated_at=datetime('now','localtime') WHERE id=?", (wid,))
-    flash("周报已提交", "ok")
-    return redirect(url_for("weekly_detail", wid=wid))
+    return ok("周报已提交")
 
 
 # ---------------------------------------------------------------- 月度报告 (自动生成 + 分析)
@@ -888,28 +911,34 @@ def scheduler_loop():
         time.sleep(3600)
 
 
-@app.route("/monthly")
+@app.route("/api/monthly")
 @login_required
 def monthly():
     month = request.args.get("month") or prev_month(date.today().strftime("%Y-%m"))
     sql, args = scope("m.user_id")
     rows = q(f"SELECT m.*, u.name sales FROM monthly_reports m JOIN users u ON u.id=m.user_id "
              f"WHERE month=? {sql} ORDER BY u.name", [month] + args)
-    parsed = [(r, json.loads(r["stats_json"])) for r in rows]
+    brief = []
+    for r in rows:
+        s = json.loads(r["stats_json"])
+        brief.append({"id": r["id"], "sales": r["sales"], "status": r["status"],
+                      "visit_count": s["visit_count"], "customer_count": s["customer_count"],
+                      "new_customers": len(s["new_customers"]), "trip_days": s["trip_days"],
+                      "cost_total": s["cost_total"], "cost_per_visit": s["cost_per_visit"],
+                      "owned_a": s["owned_a"], "a_covered": s["owned_a"] - len(s["a_missed"])})
     history = q(f"SELECT m.month, m.status, m.id FROM monthly_reports m WHERE user_id=? ORDER BY month DESC LIMIT 24",
                 (g.user["id"],))
-    return render_template("monthly.html", month=month, rows=parsed, history=history,
-                           current=date.today().strftime("%Y-%m"))
+    return jsonify(month=month, rows=brief, history=dicts(history), current=date.today().strftime("%Y-%m"))
 
 
-@app.route("/monthly/generate", methods=["POST"])
+@app.route("/api/monthly/generate", methods=["POST"])
 @login_required
 def monthly_generate():
     month = f_str("month")
     try:
         month_range(month)
     except ValueError:
-        abort(400)
+        abort(400, "月份格式不正确")
     db = get_db()
     if is_manager():
         targets = [u["id"] for u in visible_users() if needs_monthly(db, u, month)]
@@ -918,39 +947,46 @@ def monthly_generate():
     for uid in targets:
         generate_monthly(db, uid, month, force=True)
     audit("生成月报", month)
-    flash(f"{month} 月度报告已生成/刷新 ({len(targets)} 人); 已提交或已通过的报告不会被覆盖", "ok")
-    return redirect(url_for("monthly", month=month))
+    return ok(f"{month} 月度报告已生成/刷新 ({len(targets)} 人); 已提交或已通过的报告不会被覆盖")
 
 
-@app.route("/monthly/<int:mid>", methods=["GET", "POST"])
-@login_required
-def monthly_detail(mid):
+def monthly_row(mid):
     m = q("SELECT m.*, u.name sales, u.region FROM monthly_reports m JOIN users u ON u.id=m.user_id WHERE m.id=?",
           (mid,), one=True)
     check_owner(m)
-    mine = m["user_id"] == g.user["id"]
-    if request.method == "POST":
-        if not mine or m["status"] in ("submitted", "approved"):
-            abort(403)
-        action = request.form.get("action")
-        if action == "refresh":
-            generate_monthly(get_db(), m["user_id"], m["month"], force=True)
-            flash("统计数据已刷新", "ok")
-        else:
-            status = "submitted" if action == "submit" else m["status"]
-            execute("UPDATE monthly_reports SET self_summary=?, status=? WHERE id=?",
-                    (f_str("self_summary"), status, mid))
-            flash("月度报告已提交审批" if action == "submit" else "补充说明已保存", "ok")
-        return redirect(url_for("monthly_detail", mid=mid))
-    return render_template("monthly_detail.html", m=m, s=json.loads(m["stats_json"]),
-                           approvals=approvals_for("monthly", mid), mine=mine,
-                           can_approve=can_approve(m["user_id"]) and m["status"] == "submitted",
-                           can_comment=can_approve(m["user_id"]))
+    return m
+
+
+@app.route("/api/monthly/<int:mid>")
+@login_required
+def monthly_detail(mid):
+    report = dict(monthly_row(mid))
+    stats = json.loads(report.pop("stats_json"))
+    return jsonify(report=report, stats=stats, approvals=approvals_for("monthly", mid),
+                   mine=report["user_id"] == g.user["id"],
+                   can_approve=can_approve(report["user_id"]) and report["status"] == "submitted",
+                   can_comment=can_approve(report["user_id"]))
+
+
+@app.route("/api/monthly/<int:mid>", methods=["POST"])
+@login_required
+def monthly_update(mid):
+    m = monthly_row(mid)
+    if m["user_id"] != g.user["id"] or m["status"] in ("submitted", "approved"):
+        abort(403)
+    action = f_str("action")
+    if action == "refresh":
+        generate_monthly(get_db(), m["user_id"], m["month"], force=True)
+        return ok("统计数据已刷新")
+    status = "submitted" if action == "submit" else m["status"]
+    execute("UPDATE monthly_reports SET self_summary=?, status=? WHERE id=?",
+            (f_str("self_summary"), status, mid))
+    return ok("月度报告已提交审批" if action == "submit" else "补充说明已保存")
 
 
 # ---------------------------------------------------------------- 审批
 
-@app.route("/approve/<target>/<int:tid>", methods=["POST"])
+@app.route("/api/approve/<target>/<int:tid>", methods=["POST"])
 @login_required
 def approve(target, tid):
     if target not in TARGETS:
@@ -961,25 +997,23 @@ def approve(target, tid):
         abort(404)
     if not can_approve(row["user_id"]):
         abort(403)
-    decision = request.form.get("decision")
+    decision = f_str("decision")
     comment = f_str("comment")
     if decision not in ("approved", "rejected", "comment"):
         abort(400)
     if decision != "comment" and row["status"] != "submitted":
-        flash("该报告当前不是待审批状态", "error")
-    elif decision in ("rejected", "comment") and not comment:
-        flash("退回或批注时请填写意见", "error")
-    else:
-        execute("INSERT INTO approvals (target_type, target_id, approver_id, decision, comment) VALUES (?,?,?,?,?)",
-                (target, tid, g.user["id"], decision, comment))
-        if decision != "comment":
-            execute(f"UPDATE {table} SET status=? WHERE id=?", (decision, tid))
-        audit(f"审批{label}", f"#{tid} {decision}")
-        flash({"approved": "已审批通过", "rejected": "已退回修改", "comment": "意见已保存"}[decision], "ok")
-    return redirect(request.referrer or url_for("approvals"))
+        return fail("该报告当前不是待审批状态")
+    if decision in ("rejected", "comment") and not comment:
+        return fail("退回或批注时请填写意见")
+    execute("INSERT INTO approvals (target_type, target_id, approver_id, decision, comment) VALUES (?,?,?,?,?)",
+            (target, tid, g.user["id"], decision, comment))
+    if decision != "comment":
+        execute(f"UPDATE {table} SET status=? WHERE id=?", (decision, tid))
+    audit(f"审批{label}", f"#{tid} {decision}")
+    return ok({"approved": "已审批通过", "rejected": "已退回修改", "comment": "意见已保存"}[decision])
 
 
-@app.route("/approvals")
+@app.route("/api/approvals")
 @roles_required("manager", "admin")
 def approvals():
     items = []
@@ -992,18 +1026,18 @@ def approvals():
             if not can_approve(r["user_id"]):
                 continue
             if key == "trip":
-                title, url = f"{r['start_date']} ~ {r['end_date']} {r['destination']}", url_for("trip_detail", tid=r["id"])
+                title = f"{r['start_date']} ~ {r['end_date']} {r['destination']}"
             elif key == "weekly":
-                title, url = f"{r['week_start']} 当周", url_for("weekly_detail", wid=r["id"])
+                title = f"{r['week_start']} 当周"
             else:
-                title, url = f"{r['month']} 月度报告", url_for("monthly_detail", mid=r["id"])
-            items.append({"type": label, "sales": r["sales"], "title": title, "url": url})
-    return render_template("approvals.html", items=items)
+                title = f"{r['month']} 月度报告"
+            items.append({"type": key, "label": label, "id": r["id"], "sales": r["sales"], "title": title})
+    return jsonify(items=items)
 
 
 # ---------------------------------------------------------------- 客户名单
 
-@app.route("/customers")
+@app.route("/api/customers")
 @login_required
 def customers():
     a = request.args
@@ -1020,51 +1054,43 @@ def customers():
     rows = q(f"SELECT c.*, u.name owner_name, COUNT(v.id) nvisits, MAX(v.visit_date) last_visit "
              f"FROM customers c LEFT JOIN users u ON u.id=c.owner_id LEFT JOIN visits v ON v.customer_id=c.id "
              f"WHERE {' AND '.join(where)} GROUP BY c.id ORDER BY c.status='pending' DESC, c.level, c.name", args)
-    owners = q("SELECT id, name FROM users WHERE role IN ('sales','manager') AND active=1 ORDER BY name")
-    return render_template("customers.html", rows=rows, a=a, owners=owners)
+    return jsonify(rows=dicts(rows))
 
 
-@app.route("/customers/new", methods=["GET", "POST"])
-@app.route("/customers/<int:cid>/edit", methods=["GET", "POST"])
+@app.route("/api/customers", methods=["POST"])
+@app.route("/api/customers/<int:cid>", methods=["PUT"])
 @login_required
-def customer_form(cid=None):
-    c = None
+def customer_save(cid=None):
     if cid:
         if not is_manager():
             abort(403)
-        c = q("SELECT * FROM customers WHERE id=?", (cid,), one=True) or abort(404)
-    if request.method == "POST":
-        name = f_str("name")
-        dup = q("SELECT id FROM customers WHERE name=? AND id!=?", (name, cid or 0), one=True)
-        if not name:
-            flash("请填写客户名称", "error")
-        elif dup:
-            flash("客户名称已存在", "error")
-        else:
-            level = f_str("level", "B") if f_str("level") in ("A", "B", "C") else "B"
-            if is_manager():
-                owner = request.form.get("owner_id", type=int)
-                status = f_str("status", "active")
-                status = status if status in ("active", "pending", "disabled") else "active"
-            else:
-                owner, status = g.user["id"], "pending"   # 销售员新增客户需主管审核
-            data = (name, level, f_str("industry"), f_str("region"), f_str("address"), owner, status, f_str("remark"))
-            if c:
-                execute("UPDATE customers SET name=?, level=?, industry=?, region=?, address=?, owner_id=?, "
-                        "status=?, remark=? WHERE id=?", data + (cid,))
-            else:
-                cid = execute("INSERT INTO customers (name, level, industry, region, address, owner_id, status, "
-                              "remark, created_by) VALUES (?,?,?,?,?,?,?,?,?)", data + (g.user["id"],))
-            audit("保存客户", name)
-            flash("已提交, 主管审核通过后即可在拜访记录中选择" if status == "pending" and not is_manager()
-                  else "客户已保存", "ok")
-            return redirect(url_for("customer_detail", cid=cid))
-    owners = q("SELECT id, name FROM users WHERE role IN ('sales','manager') AND active=1 ORDER BY name")
-    form = request.form if request.method == "POST" else (c or {})
-    return render_template("customer_form.html", c=c, form=form, owners=owners)
+        q("SELECT id FROM customers WHERE id=?", (cid,), one=True) or abort(404)
+    name = f_str("name")
+    dup = q("SELECT id FROM customers WHERE name=? AND id!=?", (name, cid or 0), one=True)
+    if not name:
+        return fail("请填写客户名称")
+    if dup:
+        return fail("客户名称已存在")
+    level = f_str("level", "B") if f_str("level") in ("A", "B", "C") else "B"
+    if is_manager():
+        owner = f_int("owner_id")
+        status = f_str("status", "active")
+        status = status if status in ("active", "pending", "disabled") else "active"
+    else:
+        owner, status = g.user["id"], "pending"   # 销售员新增客户需主管审核
+    data = (name, level, f_str("industry"), f_str("region"), f_str("address"), owner, status, f_str("remark"))
+    if cid:
+        execute("UPDATE customers SET name=?, level=?, industry=?, region=?, address=?, owner_id=?, "
+                "status=?, remark=? WHERE id=?", data + (cid,))
+    else:
+        cid = execute("INSERT INTO customers (name, level, industry, region, address, owner_id, status, "
+                      "remark, created_by) VALUES (?,?,?,?,?,?,?,?,?)", data + (g.user["id"],))
+    audit("保存客户", name)
+    return ok("已提交, 主管审核通过后即可在拜访记录中选择" if status == "pending" and not is_manager()
+              else "客户已保存", id=cid)
 
 
-@app.route("/customers/<int:cid>")
+@app.route("/api/customers/<int:cid>")
 @login_required
 def customer_detail(cid):
     c = q("SELECT c.*, u.name owner_name FROM customers c LEFT JOIN users u ON u.id=c.owner_id WHERE c.id=?",
@@ -1072,32 +1098,29 @@ def customer_detail(cid):
     sql, args = scope("v.user_id")
     vs = q(f"{VISIT_SELECT} WHERE v.customer_id=? {sql} ORDER BY visit_date DESC", [cid] + args)
     contacts = q("SELECT * FROM contacts WHERE customer_id=? ORDER BY name", (cid,))
-    return render_template("customer_detail.html", c=c, visits=vs, contacts=contacts)
+    return jsonify(customer=dict(c), visits=dicts(vs), contacts=dicts(contacts))
 
 
-@app.route("/customers/<int:cid>/approve", methods=["POST"])
+@app.route("/api/customers/<int:cid>/approve", methods=["POST"])
 @roles_required("manager", "admin")
 def customer_approve(cid):
-    status = "active" if request.form.get("ok") else "disabled"
+    status = "active" if body().get("ok") else "disabled"
     execute("UPDATE customers SET status=? WHERE id=?", (status, cid))
     audit("审核客户", f"#{cid} {status}")
-    flash("客户已审核通过" if status == "active" else "客户申请已驳回", "ok")
-    return redirect(request.referrer or url_for("customers"))
+    return ok("客户已审核通过" if status == "active" else "客户申请已驳回")
 
 
-@app.route("/customers/import", methods=["POST"])
+@app.route("/api/customers/import", methods=["POST"])
 @roles_required("manager", "admin")
 def customer_import():
     from openpyxl import load_workbook
     file = request.files.get("file")
     if not file:
-        flash("请选择 Excel 文件", "error")
-        return redirect(url_for("customers"))
+        return fail("请选择 Excel 文件")
     try:
         ws = load_workbook(file, read_only=True).active
     except Exception:  # noqa: BLE001
-        flash("无法读取文件, 请上传 .xlsx 格式", "error")
-        return redirect(url_for("customers"))
+        return fail("无法读取文件, 请上传 .xlsx 格式")
     users = {r["username"]: r["id"] for r in q("SELECT id, username FROM users")}
     users.update({r["name"]: r["id"] for r in q("SELECT id, name FROM users")})
     added = skipped = 0
@@ -1116,13 +1139,12 @@ def customer_import():
                  str(row[4] or ""), users.get(str(row[5] or "").strip()), g.user["id"]))
         added += 1
     audit("导入客户", f"新增{added} 跳过{skipped}")
-    flash(f"导入完成: 新增 {added} 家, 跳过重名 {skipped} 家", "ok")
-    return redirect(url_for("customers"))
+    return ok(f"导入完成: 新增 {added} 家, 跳过重名 {skipped} 家")
 
 
 # ---------------------------------------------------------------- 后台统计
 
-@app.route("/stats")
+@app.route("/api/stats")
 @login_required
 def stats():
     a = request.args.to_dict()
@@ -1148,12 +1170,16 @@ def stats():
     by_type = q(f"SELECT visit_type, COUNT(*) n FROM visits v JOIN customers c ON c.id=v.customer_id "
                 f"WHERE {where} GROUP BY visit_type ORDER BY n DESC", args)
     detail = q(f"{VISIT_SELECT} WHERE {where} ORDER BY v.visit_date DESC LIMIT 200", args)
-    return render_template("stats.html", a=a, by_sales=by_sales, trips_by=trips_by, by_customer=by_customer,
-                           by_type=by_type, detail=detail, users=visible_users(),
-                           customers=active_customers(), types=VISIT_TYPES)
+    sales_rows = []
+    for r in by_sales:
+        t = trips_by.get(r["id"])
+        sales_rows.append(dict(r, trip_n=t["n"] if t else 0, trip_days=int(t["days"]) if t else 0,
+                               trip_cost=t["cost"] if t else 0))
+    return jsonify(filters=a, by_sales=sales_rows, by_customer=dicts(by_customer), by_type=dicts(by_type),
+                   detail=dicts(detail))
 
 
-@app.route("/stats/export")
+@app.route("/api/stats/export")
 @login_required
 def stats_export():
     from openpyxl import Workbook
@@ -1206,83 +1232,93 @@ def stats_export():
 
 # ---------------------------------------------------------------- 账号管理
 
-@app.route("/users")
+USER_COLS = "u.id, u.username, u.name, u.role, u.manager_id, u.region, u.phone, u.active, u.must_change_pw, u.created_at"
+
+
+@app.route("/api/users")
 @roles_required("admin")
 def users():
-    rows = q("SELECT u.*, m.name manager_name FROM users u LEFT JOIN users m ON m.id=u.manager_id "
+    rows = q(f"SELECT {USER_COLS}, m.name manager_name FROM users u LEFT JOIN users m ON m.id=u.manager_id "
              "ORDER BY u.active DESC, u.role, u.name")
-    return render_template("users.html", rows=rows)
+    return jsonify(rows=dicts(rows))
 
 
-@app.route("/users/new", methods=["GET", "POST"])
-@app.route("/users/<int:uid>/edit", methods=["GET", "POST"])
+@app.route("/api/users/form")
 @roles_required("admin")
-def user_form(uid=None):
-    u = q("SELECT * FROM users WHERE id=?", (uid,), one=True) if uid else None
+def user_form_data():
+    uid = request.args.get("id", type=int)
+    u = q(f"SELECT {USER_COLS} FROM users u WHERE id=?", (uid,), one=True) if uid else None
     if uid and not u:
         abort(404)
-    if request.method == "POST":
-        username, role = f_str("username"), f_str("role")
-        pw = request.form.get("password", "")
-        dup = q("SELECT 1 FROM users WHERE username=? AND id!=?", (username, uid or 0), one=True)
-        if not username or not f_str("name") or role not in ROLES:
-            flash("请完整填写用户名、姓名和角色", "error")
-        elif dup:
-            flash("用户名已存在", "error")
-        elif not u and len(pw) < 6:
-            flash("初始密码至少 6 位", "error")
-        elif u and u["id"] == g.user["id"] and (role != "admin" or not request.form.get("active")):
-            flash("不能取消自己的管理员权限或停用自己", "error")
-        else:
-            manager_id = request.form.get("manager_id", type=int) if role == "sales" else None
-            data = (username, f_str("name"), role, manager_id, f_str("region"), f_str("phone"),
-                    1 if request.form.get("active") else 0)
-            if u:
-                execute("UPDATE users SET username=?, name=?, role=?, manager_id=?, region=?, phone=?, active=? "
-                        "WHERE id=?", data + (uid,))
-                if pw:
-                    execute("UPDATE users SET password_hash=?, must_change_pw=1 WHERE id=?",
-                            (generate_password_hash(pw), uid))
-                to_id = request.form.get("transfer_to", type=int)
-                if to_id and to_id != uid:
-                    n = get_db().execute("UPDATE customers SET owner_id=? WHERE owner_id=?", (to_id, uid)).rowcount
-                    get_db().commit()
-                    audit("改派客户", f"{username} -> #{to_id} 共{n}家")
-                    flash(f"已将 {n} 家客户改派", "ok")
-            else:
-                execute("INSERT INTO users (username, name, role, manager_id, region, phone, active, password_hash) "
-                        "VALUES (?,?,?,?,?,?,?,?)", data + (generate_password_hash(pw),))
-            audit("保存账号", username)
-            flash("账号已保存" + (", 用户下次登录需修改密码" if pw else ""), "ok")
-            return redirect(url_for("users"))
     managers = q("SELECT id, name FROM users WHERE role='manager' AND active=1 ORDER BY name")
     owned = q("SELECT COUNT(*) c FROM customers WHERE owner_id=?", (uid,), one=True)["c"] if u else 0
     others = q("SELECT id, name FROM users WHERE role IN ('sales','manager') AND active=1 AND id!=? ORDER BY name",
                (uid or 0,))
-    form = request.form if request.method == "POST" else (u or {"active": 1, "role": "sales"})
-    return render_template("user_form.html", u=u, form=form, managers=managers, owned=owned, others=others)
+    return jsonify(user=dict(u) if u else None, managers=dicts(managers), owned=owned, others=dicts(others))
 
 
-@app.route("/logs")
+@app.route("/api/users", methods=["POST"])
+@app.route("/api/users/<int:uid>", methods=["PUT"])
+@roles_required("admin")
+def user_save(uid=None):
+    u = q("SELECT * FROM users WHERE id=?", (uid,), one=True) if uid else None
+    if uid and not u:
+        abort(404)
+    username, role = f_str("username"), f_str("role")
+    pw = str(body().get("password") or "")
+    active = bool(body().get("active"))
+    dup = q("SELECT 1 FROM users WHERE username=? AND id!=?", (username, uid or 0), one=True)
+    if not username or not f_str("name") or role not in ROLES:
+        return fail("请完整填写用户名、姓名和角色")
+    if dup:
+        return fail("用户名已存在")
+    if not u and len(pw) < 6:
+        return fail("初始密码至少 6 位")
+    if u and u["id"] == g.user["id"] and (role != "admin" or not active):
+        return fail("不能取消自己的管理员权限或停用自己")
+    manager_id = f_int("manager_id") if role == "sales" else None
+    data = (username, f_str("name"), role, manager_id, f_str("region"), f_str("phone"), 1 if active else 0)
+    msgs = []
+    if u:
+        execute("UPDATE users SET username=?, name=?, role=?, manager_id=?, region=?, phone=?, active=? "
+                "WHERE id=?", data + (uid,))
+        if pw:
+            execute("UPDATE users SET password_hash=?, must_change_pw=1 WHERE id=?",
+                    (generate_password_hash(pw), uid))
+        to_id = f_int("transfer_to")
+        if to_id and to_id != uid:
+            n = get_db().execute("UPDATE customers SET owner_id=? WHERE owner_id=?", (to_id, uid)).rowcount
+            get_db().commit()
+            audit("改派客户", f"{username} -> #{to_id} 共{n}家")
+            msgs.append(f"已将 {n} 家客户改派")
+    else:
+        uid = execute("INSERT INTO users (username, name, role, manager_id, region, phone, active, password_hash) "
+                      "VALUES (?,?,?,?,?,?,?,?)", data + (generate_password_hash(pw),))
+    audit("保存账号", username)
+    msgs.insert(0, "账号已保存" + (", 用户下次登录需修改密码" if pw else ""))
+    return ok("; ".join(msgs), id=uid)
+
+
+@app.route("/api/logs")
 @roles_required("admin")
 def logs():
     rows = q("SELECT l.*, u.name FROM audit_log l LEFT JOIN users u ON u.id=l.user_id ORDER BY l.id DESC LIMIT 300")
-    return render_template("logs.html", rows=rows)
+    return jsonify(rows=dicts(rows))
 
 
-@app.errorhandler(403)
-def forbidden(e):
-    return render_template("error.html", code=403, msg="没有权限访问该页面"), 403
+# ---------------------------------------------------------------- 前端页面 (React 构建产物)
 
-
-@app.errorhandler(404)
-def not_found(e):
-    return render_template("error.html", code=404, msg="页面或记录不存在"), 404
-
-
-@app.errorhandler(400)
-def bad_request(e):
-    return render_template("error.html", code=400, msg=e.description or "请求无效"), 400
+@app.route("/", defaults={"path": ""})
+@app.route("/<path:path>")
+def spa(path):
+    if path.startswith("api/"):
+        abort(404)
+    if path and os.path.isfile(os.path.join(DIST_DIR, path)):
+        # 带哈希的构建产物可长期缓存; index.html 每次校验
+        return send_from_directory(DIST_DIR, path, max_age=31536000 if path.startswith("assets/") else None)
+    if not os.path.isfile(os.path.join(DIST_DIR, "index.html")):
+        return "前端尚未构建: 请在 frontend 目录执行 npm run build (开发时使用 npm run dev)", 503
+    return send_from_directory(DIST_DIR, "index.html")
 
 
 def start_background():

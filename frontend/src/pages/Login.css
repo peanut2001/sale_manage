@@ -1,0 +1,258 @@
+.login-page {
+  position: relative;
+  min-height: 100vh;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 92% 96%, rgba(47, 107, 255, 0.1), transparent 34%),
+    linear-gradient(135deg, #f4f7fd 0%, #f9fbfe 55%, #eef3fb 100%);
+}
+
+/* 左侧斜切背景图 + 蓝色遮罩 */
+.login-hero {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 61%;
+  background-size: cover;
+  background-position: 28% center;
+  clip-path: polygon(0 0, 100% 0, 84% 100%, 0 100%);
+}
+.login-hero::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(180deg, rgba(30, 86, 214, 0.82) 0%, rgba(38, 102, 232, 0.5) 32%, rgba(38, 102, 232, 0.08) 58%, transparent 72%),
+    linear-gradient(90deg, rgba(30, 86, 214, 0.3) 0%, transparent 55%);
+}
+
+.login-top {
+  position: absolute;
+  z-index: 2;
+  top: 34px;
+  left: 72px;
+  right: 72px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.login-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: #fff;
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: 1px;
+}
+.login-brand svg {
+  filter: drop-shadow(0 2px 6px rgba(10, 40, 120, 0.25));
+}
+.login-slogans {
+  display: flex;
+  align-items: center;
+  color: #4b5563;
+  font-size: 14px;
+}
+.login-slogans span + span::before {
+  content: '·';
+  margin: 0 18px;
+  color: #9ca3af;
+}
+
+.login-intro {
+  position: absolute;
+  z-index: 2;
+  top: 16vh;
+  left: 108px;
+  color: #fff;
+}
+.login-intro h1 {
+  margin: 0;
+  font-size: clamp(40px, 4.1vw, 68px);
+  font-weight: 800;
+  letter-spacing: 4px;
+  line-height: 1.2;
+  text-shadow: 0 4px 24px rgba(10, 40, 120, 0.3);
+}
+.login-intro p {
+  margin: 18px 0 44px;
+  font-size: clamp(18px, 1.7vw, 28px);
+  letter-spacing: 1px;
+  color: rgba(255, 255, 255, 0.92);
+  text-shadow: 0 2px 12px rgba(10, 40, 120, 0.3);
+}
+.login-features {
+  display: flex;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.login-features li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 26px;
+  border-left: 1px solid rgba(255, 255, 255, 0.28);
+}
+.login-features li:first-child {
+  padding-left: 0;
+  border-left: 0;
+}
+.login-feature-icon {
+  display: grid;
+  place-items: center;
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  font-size: 20px;
+  background: rgba(255, 255, 255, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  backdrop-filter: blur(6px);
+}
+.login-features b {
+  display: block;
+  font-size: 16px;
+}
+.login-features small {
+  display: block;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.78);
+}
+
+/* 右侧登录卡 */
+.login-card-wrap {
+  position: relative;
+  z-index: 3;
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding: 110px 5vw 40px;
+}
+.login-card {
+  width: clamp(420px, 31vw, 540px);
+  padding: 48px 48px 30px;
+  text-align: center;
+  background: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.8);
+  border-radius: 22px;
+  box-shadow: 0 24px 64px rgba(31, 64, 140, 0.12);
+}
+.login-card h2 {
+  margin: 14px 0 6px;
+  font-size: 26px;
+  font-weight: 700;
+  color: #111827;
+  letter-spacing: 1px;
+}
+.login-card-sub {
+  margin: 0 0 30px;
+  color: #6b7280;
+  font-size: 14px;
+}
+.login-card form {
+  text-align: left;
+}
+.login-card .ant-form-item-label > label {
+  font-size: 15px;
+  color: #374151;
+}
+.login-card .ant-input-affix-wrapper {
+  padding-top: 10px;
+  padding-bottom: 10px;
+}
+.login-card .ant-input-prefix {
+  margin-inline-end: 10px;
+  color: #9ca3af;
+}
+.login-error {
+  margin-bottom: 18px;
+  text-align: left;
+}
+.login-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: -4px 0 26px;
+}
+.login-btn.ant-btn {
+  height: 54px;
+  font-size: 17px;
+  letter-spacing: 2px;
+  border-radius: 10px;
+}
+.login-footer {
+  margin-top: 40px;
+  font-size: 13px;
+  color: #9ca3af;
+}
+.login-footer i {
+  margin: 0 8px;
+  font-style: normal;
+  color: #d1d5db;
+}
+
+/* 中等屏幕: 功能点两列 */
+@media (max-width: 1280px) {
+  .login-intro {
+    left: 6vw;
+  }
+  .login-features {
+    display: grid;
+    grid-template-columns: repeat(2, auto);
+    gap: 20px 0;
+  }
+  .login-features li:nth-child(3) {
+    padding-left: 0;
+    border-left: 0;
+  }
+  .login-card {
+    width: 420px;
+    padding: 40px 36px 26px;
+  }
+}
+
+/* 手机 / 平板竖屏: 背景铺满, 登录卡居中 */
+@media (max-width: 900px) {
+  .login-hero {
+    width: 100%;
+    clip-path: none;
+    background-position: 22% center;
+  }
+  .login-hero::after {
+    background: linear-gradient(180deg, rgba(24, 72, 190, 0.78) 0%, rgba(24, 72, 190, 0.35) 45%, rgba(24, 72, 190, 0.65) 100%);
+  }
+  .login-top {
+    top: 20px;
+    left: 20px;
+    right: 20px;
+  }
+  .login-brand {
+    font-size: 17px;
+  }
+  .login-slogans,
+  .login-intro {
+    display: none;
+  }
+  .login-card-wrap {
+    justify-content: center;
+    padding: 84px 16px 24px;
+  }
+  .login-card {
+    width: 100%;
+    max-width: 440px;
+    padding: 32px 22px 22px;
+    background: rgba(255, 255, 255, 0.96);
+    backdrop-filter: blur(8px);
+  }
+  .login-footer {
+    margin-top: 28px;
+    font-size: 12px;
+  }
+  .login-footer i {
+    display: none;
+  }
+  .login-footer span {
+    display: block;
+  }
+}

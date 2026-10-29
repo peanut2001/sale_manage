@@ -9,3 +9,5 @@ backup
 .env
 deploy
 tests
+frontend/node_modules
+frontend/dist

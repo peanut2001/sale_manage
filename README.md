@@ -1,13 +1,14 @@
 # 销售拜访管理系统
 
 销售员客户拜访记录 / 出差报告 / 周报 / 月度报告 + 主管审批 + 后台统计。
-技术栈: Python 3.10+ · Flask · SQLite · 网页端 (手机浏览器可直接使用, 无需安装 App)。
+技术栈: 后端 Python 3.10+ · Flask · SQLite (JSON 接口); 前端 React 19 · TypeScript · Ant Design 6 · Vite。
+网页端, 手机浏览器可直接使用, 无需安装 App。
 
 ## 功能对照需求
 
 | 需求 | 实现 |
 |---|---|
-| 1. 每个销售员独立账号密码, 可远程/云端访问 | 管理员在「账号管理」中开户; 密码加密存储; 首次登录强制改密; 登录失败 5 次锁定 10 分钟。部署到百度智能云后, 外网任何地方都可通过浏览器访问 |
+| 1. 每个销售员独立账号密码, 可远程/云端访问 | 管理员在「账号管理」中开户; 密码加密存储; 首次登录强制改密; 登录失败 5 次锁定 10 分钟; 勾选「记住我」保持登录 7 天, 不勾选则关闭浏览器即退出。部署到百度智能云后, 外网任何地方都可通过浏览器访问 |
 | 2. 局域网外填写出差报告 | 出差报告: 起止日期、地点、目的、交通、四类费用、总结, 草稿→提交→审批 |
 | 3. 客户名单可选填 | 拜访记录中客户只能从名单中选择 (支持搜索), 保证统计口径一致。销售员可"申请新增客户", 主管审核后生效; 主管可 Excel 批量导入 |
 | 4. 后台统计拜访时间、客户、洽谈人员、内容等 | 「统计分析」: 按时间/销售员/客户/类型/关键字筛选; 按销售员、按客户、按类型汇总; 一键导出 Excel (明细 + 汇总三张表) |
@@ -16,13 +17,18 @@
 
 ## 快速体验 (Windows)
 
+需要 Python 3.10+ 和 Node.js 22.22+。
+
 ```powershell
-cd sales-report-system
 python -m venv .venv
 .\.venv\Scripts\pip install -r requirements.txt
+cd frontend; npm ci; npm run build; cd ..   # 编译前端到 frontend/dist
 .\.venv\Scripts\python seed_demo.py      # 生成演示数据 (会清空数据库)
 .\.venv\Scripts\python app.py            # 浏览器打开 http://127.0.0.1:5000
 ```
+
+前端开发: 先运行 `python app.py` (接口, 5000 端口), 再在 `frontend` 目录运行 `npm run dev`,
+浏览器打开终端里显示的地址 (默认 http://localhost:5173), 改代码后页面自动刷新, `/api` 请求会转发给 5000 端口。
 
 演示账号 (密码均为 `demo1234`): `admin` 管理员 · `zhangjl` 销售主管 · `lixm` / `wangf` 销售员
 
@@ -75,7 +81,7 @@ docker compose pull && docker compose up -d
 ## 部署到百度智能云 (BCC 云服务器, 不使用 Docker)
 
 1. 购买 BCC 云服务器 (1 核 2G 足够 50 人以内团队), 系统选 Ubuntu 22.04; 在安全组放行 80、443 端口。
-2. 上传代码并安装:
+2. 先在本机编译前端 (`cd frontend && npm ci && npm run build`), 再把项目文件连同 `frontend/dist` 一起上传并安装:
    ```bash
    sudo apt update && sudo apt install -y python3-venv nginx
    cd /opt && sudo mkdir sales && sudo chown $USER sales && cd sales   # 把本项目文件上传到这里
@@ -124,13 +130,12 @@ docker compose pull && docker compose up -d
 ## 目录结构
 
 ```
-app.py            全部业务逻辑与路由
+app.py            全部业务逻辑与 /api 接口, 并托管前端页面
 schema.sql        数据库结构
 serve.py          生产启动 (waitress)
 seed_demo.py      演示数据
-templates/        页面模板
-static/style.css  样式 (适配手机)
-tests/            冒烟测试
+frontend/         React 前端 (src/pages 各页面, src/components 公共组件; 构建产物 frontend/dist)
+tests/            冒烟测试 (接口)
 data/sales.db     数据库 (运行后自动生成)
 Dockerfile        镜像构建
 docker-compose.yml        本机 Docker 运行

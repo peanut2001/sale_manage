@@ -1,0 +1,350 @@
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+  background: #f3f6fb;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ---------- 布局 ---------- */
+.app-layout {
+  min-height: 100vh;
+}
+.app-sider {
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  overflow: auto;
+  box-shadow: 1px 0 0 #edf0f5;
+  z-index: 11;
+}
+.app-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 64px;
+  padding: 0 20px;
+  font-size: 16px;
+  font-weight: 700;
+  color: #111827 !important;
+  letter-spacing: 0.5px;
+}
+.app-menu.ant-menu {
+  border-inline-end: 0 !important;
+  padding: 6px 12px;
+}
+.menu-badge {
+  margin-left: 8px;
+}
+.app-header.ant-layout-header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  box-shadow: 0 1px 0 #edf0f5;
+}
+.app-brand-mini {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.header-right {
+  margin-left: auto;
+}
+.user-chip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 10px 4px 4px;
+  font: inherit;
+  background: none;
+  border: 0;
+  border-radius: 24px;
+  cursor: pointer;
+}
+.user-chip:hover {
+  background: #f3f6fb;
+}
+.user-chip .ant-tag {
+  margin: 0;
+}
+.user-avatar.ant-avatar {
+  background: linear-gradient(135deg, #5aaeff, #2f6bff);
+}
+.app-content {
+  width: 100%;
+  max-width: 1440px;
+  margin: 0 auto;
+  padding: 24px;
+}
+
+/* ---------- 页面通用 ---------- */
+.page-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+.page-header h1 {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  font-size: 22px;
+  font-weight: 700;
+  color: #111827;
+}
+.page-header h1 .ant-tag {
+  margin: 0;
+  font-size: 13px;
+}
+.page-sub {
+  margin-top: 4px;
+  font-size: 13px;
+  color: #6b7280;
+}
+.page-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.page-skeleton {
+  padding: 24px;
+  background: #fff;
+  border-radius: 14px;
+}
+.app-content .ant-card {
+  box-shadow: 0 4px 20px rgba(31, 64, 128, 0.05);
+}
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.filter-card .ant-form-item {
+  margin-bottom: 12px;
+}
+.filter-card .ant-picker,
+.filter-card .ant-select {
+  width: 100%;
+}
+.form-card .ant-picker,
+.form-card .ant-input-number {
+  width: 100%;
+}
+.form-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.prose {
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.hint {
+  font-size: 12px;
+  color: #6b7280;
+}
+.level-tag.ant-tag {
+  margin-inline-end: 6px;
+  font-weight: 600;
+}
+.approve-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 8px;
+}
+.money-total {
+  font-weight: 700;
+  color: #111827;
+}
+
+/* 渐变主按钮 (取自设计图) */
+.ant-btn.ant-btn-color-primary.ant-btn-variant-solid:not(:disabled) {
+  background: linear-gradient(90deg, #2f6bff, #3d9bff);
+}
+.ant-btn.ant-btn-color-primary.ant-btn-variant-solid:not(:disabled):hover {
+  background: linear-gradient(90deg, #4a80ff, #5aaeff);
+}
+
+/* ---------- 指标卡 ---------- */
+.kpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 16px;
+  margin-bottom: 16px;
+}
+.kpi {
+  position: relative;
+  overflow: hidden;
+  padding: 18px 20px;
+  background: #fff;
+  border-radius: 14px;
+  box-shadow: 0 4px 20px rgba(31, 64, 128, 0.05);
+}
+.kpi-label {
+  font-size: 13px;
+  color: #6b7280;
+}
+.kpi.with-icon .kpi-label {
+  padding-right: 48px;
+}
+.kpi-value {
+  margin-top: 6px;
+  font-size: 28px;
+  font-weight: 700;
+  line-height: 1.2;
+  color: #111827;
+  font-variant-numeric: tabular-nums;
+}
+.kpi-value a {
+  color: inherit;
+}
+.kpi-sub {
+  margin-top: 2px;
+  font-size: 12px;
+  color: #9ca3af;
+}
+.kpi-icon {
+  position: absolute;
+  top: 18px;
+  right: 18px;
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  font-size: 18px;
+  color: #fff;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #5aaeff, #2f6bff);
+  box-shadow: 0 6px 14px rgba(47, 107, 255, 0.25);
+}
+
+/* 分布条 */
+.bar-row {
+  display: grid;
+  grid-template-columns: 88px 1fr 40px;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 0;
+}
+.bar-row .ant-progress {
+  margin: 0;
+}
+.bar-row b {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 991px) {
+  .app-header.ant-layout-header {
+    padding: 0 12px;
+  }
+  .app-content {
+    padding: 14px 12px 32px;
+  }
+  .page-header h1 {
+    font-size: 19px;
+  }
+  .kpis {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+  }
+  .kpi-value {
+    font-size: 22px;
+  }
+  .kpi-icon {
+    display: none;
+  }
+}
+
+@media print {
+  .app-sider,
+  .app-header,
+  .no-print,
+  .ant-btn {
+    display: none !important;
+  }
+  body,
+  .app-layout {
+    background: #fff;
+  }
+  .app-content {
+    padding: 0;
+  }
+  .app-content .ant-card,
+  .kpi {
+    box-shadow: none;
+    break-inside: avoid;
+  }
+}
+.mb16 {
+  margin-bottom: 16px;
+}
+.stack .page-header {
+  margin-bottom: 2px;
+}
+.full-height {
+  height: 100%;
+}
+.form-section {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  margin: 8px 0 12px;
+  font-size: 15px;
+  font-weight: 600;
+}
+.sub-title {
+  margin: 16px 0 6px;
+  font-size: 14px;
+}
+.nowrap {
+  white-space: nowrap;
+}
+.analysis {
+  margin: 0;
+  padding-left: 20px;
+  line-height: 1.9;
+}
+.kv-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 7px 0;
+  border-bottom: 1px dashed #edf0f5;
+}
+.kv-row:last-child {
+  border-bottom: 0;
+}
+.import-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.summary-row td {
+  font-weight: 700;
+}
+@media (max-width: 991px) {
+  .kpi.with-icon .kpi-label {
+    padding-right: 0;
+  }
+  .app-content .ant-card-body {
+    padding: 14px;
+  }
+}
+.approval-comment {
+  margin-top: 4px;
+  color: #374151;
+}
