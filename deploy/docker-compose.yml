@@ -1,0 +1,18 @@
+# 服务器部署: 只拉取 GitHub 构建好的镜像, 不需要源码
+#   cp .env.example .env   # 填写 APP_VERSION / SECRET_KEY
+#   docker compose pull && docker compose up -d
+services:
+  app:
+    image: ghcr.io/peanut2001/sale_manage:${APP_VERSION:?请在 .env 中设置 APP_VERSION, 例如 1.0.0}
+    container_name: sale_manage
+    ports:
+      - "8000:8000"
+    environment:
+      SECRET_KEY: ${SECRET_KEY:?请在 .env 中设置 SECRET_KEY}
+      COOKIE_SECURE: ${COOKIE_SECURE:-0}
+    volumes:
+      - sales-data:/app/data
+    restart: unless-stopped
+
+volumes:
+  sales-data:

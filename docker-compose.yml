@@ -1,0 +1,17 @@
+# 本机构建并运行: docker compose up -d --build   →  http://127.0.0.1:8000
+# SECRET_KEY 写在同目录 .env 中 (已被 .gitignore 忽略)
+services:
+  app:
+    build: .
+    image: sale_manage:local
+    container_name: sale_manage
+    ports:
+      - "8000:8000"
+    environment:
+      SECRET_KEY: ${SECRET_KEY:?请在 .env 中设置 SECRET_KEY}
+    volumes:
+      - sales-data:/app/data
+    restart: unless-stopped
+
+volumes:
+  sales-data:

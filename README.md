@@ -30,7 +30,49 @@ python -m venv .venv
 
 运行测试: `.\.venv\Scripts\python tests\smoke_test.py`
 
-## 部署到百度智能云 (BCC 云服务器)
+## Docker
+
+### 本机运行
+
+```bash
+echo "SECRET_KEY=$(python -c 'import secrets;print(secrets.token_hex(32))')" > .env   # 只需一次
+docker compose up -d --build      # 浏览器打开 http://127.0.0.1:8000
+docker compose logs -f            # 查看日志
+docker compose down               # 停止 (数据保存在 sales-data 卷中, 不会丢失)
+```
+
+### 发布镜像 (带版本号)
+
+镜像由 GitHub Actions 自动构建, **只有推送 `vX.Y.Z` 格式的 tag 才会发布**, 先跑冒烟测试, 通过后推送到
+`ghcr.io/peanut2001/sale_manage:X.Y.Z` 并更新 `:latest`:
+
+```bash
+git push origin main
+git tag v1.0.1 && git push origin v1.0.1
+```
+
+构建进度见仓库的 Actions 页面; 已发布的版本见仓库首页右侧 Packages。
+
+### 服务器部署
+
+服务器只需安装 Docker, 不需要源码。把 `deploy/` 目录下的 `docker-compose.yml` 和 `.env.example` 上传到 `/opt/sales`:
+
+```bash
+cd /opt/sales
+cp .env.example .env              # 填写 APP_VERSION (如 1.0.1) 和 SECRET_KEY
+docker compose pull && docker compose up -d
+```
+
+- 升级: 修改 `.env` 中的 `APP_VERSION` 后再执行 `docker compose pull && docker compose up -d`; 回滚同理改回旧版本号。
+- Nginx / HTTPS 配置同下文第 4、5 步 (反代到 `127.0.0.1:8000`), 启用 HTTPS 后把 `.env` 中 `COOKIE_SECURE` 改为 1。
+- 备份 (数据库在 `sales-data` 卷中):
+  ```bash
+  mkdir -p /opt/sales/backup
+  # crontab -e
+  0 2 * * * cd /opt/sales && docker compose exec -T app python -c "import sqlite3;d=sqlite3.connect('/app/data/backup.db');sqlite3.connect('/app/data/sales.db').backup(d);d.close()" && docker compose cp app:/app/data/backup.db ./backup/sales-$(date +\%F).db
+  ```
+
+## 部署到百度智能云 (BCC 云服务器, 不使用 Docker)
 
 1. 购买 BCC 云服务器 (1 核 2G 足够 50 人以内团队), 系统选 Ubuntu 22.04; 在安全组放行 80、443 端口。
 2. 上传代码并安装:
@@ -90,6 +132,10 @@ templates/        页面模板
 static/style.css  样式 (适配手机)
 tests/            冒烟测试
 data/sales.db     数据库 (运行后自动生成)
+Dockerfile        镜像构建
+docker-compose.yml        本机 Docker 运行
+deploy/           服务器部署用 docker-compose.yml + .env.example
+.github/workflows/        推送版本 tag 自动发布镜像
 ```
 
 ## 月报自动生成规则
