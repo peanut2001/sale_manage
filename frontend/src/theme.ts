@@ -20,9 +20,13 @@ export const theme: ThemeConfig = {
     Layout: {
       headerBg: '#ffffff', siderBg: '#ffffff', headerHeight: 64, headerPadding: '0 24px',
     },
-    Menu: { itemBorderRadius: 8, itemSelectedBg: '#eaf1ff', itemHeight: 44, iconSize: 16 },
-    Card: { borderRadiusLG: 14, headerFontSize: 16 },
+    Menu: {
+      itemBorderRadius: 10, itemSelectedBg: '#eaf1ff', itemHoverBg: '#f3f6fb', itemHeight: 42, iconSize: 17,
+      itemMarginBlock: 2, groupTitleColor: '#9aa3b2', groupTitleFontSize: 12,
+    },
+    Card: { borderRadiusLG: 14, headerFontSize: 15 },
     Table: { headerBg: '#f7f9fc', headerColor: '#6b7280' },
-    Button: { primaryShadow: '0 6px 16px rgba(47, 107, 255, 0.24)' },
+    // 主按钮只在弹窗/表单提交时使用, 纯色无阴影; 页面上的操作按钮用浅色 (color="primary" variant="filled")
+    Button: { primaryShadow: 'none' },
   },
 }

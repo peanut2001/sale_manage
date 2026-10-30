@@ -12,6 +12,7 @@ import type { Role } from './types'
 const Login = lazy(pageLoaders.Login)
 const Dashboard = lazy(pageLoaders.Dashboard)
 const Password = lazy(pageLoaders.Password)
+const Profile = lazy(pageLoaders.Profile)
 const VisitList = lazy(pageLoaders.VisitList)
 const VisitDetail = lazy(pageLoaders.VisitDetail)
 const TripList = lazy(pageLoaders.TripList)
@@ -44,6 +45,7 @@ export default function App() {
                 <Route element={<AppLayout />}>
                   <Route index element={<Dashboard />} />
                   <Route path="password" element={<Password />} />
+                  <Route path="profile" element={<Profile />} />
                   <Route path="visits" element={<VisitList />} />
                   <Route path="visits/:id" element={<VisitDetail />} />
                   <Route path="trips" element={<TripList />} />

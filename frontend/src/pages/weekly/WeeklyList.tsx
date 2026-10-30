@@ -24,11 +24,11 @@ export default function WeeklyList() {
   const monday = dayjs(session.today).startOf('week').format('YYYY-MM-DD')
   const mine = state.data?.rows.find((w) => w.user_id === me.id && w.week_start === monday)
   const toolbar = mine ? (
-    <Button type="primary" onClick={() => navigate(`/weekly/${mine.id}`)}>
+    <Button color="primary" variant="filled" onClick={() => navigate(`/weekly/${mine.id}`)}>
       本周周报 · {session.status[mine.status]?.[0]}
     </Button>
   ) : (
-    <Button type="primary" icon={<PlusOutlined />} onClick={() => setOpen(true)}>写本周周报</Button>
+    <Button color="primary" variant="filled" icon={<PlusOutlined />} onClick={() => setOpen(true)}>写本周周报</Button>
   )
 
   return (

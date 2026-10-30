@@ -1,9 +1,9 @@
 import {
   AuditOutlined, BarChartOutlined, CalendarOutlined, CarOutlined, ContactsOutlined, FileTextOutlined,
-  HistoryOutlined, HomeOutlined, LockOutlined, LogoutOutlined, MenuFoldOutlined, MenuOutlined, MenuUnfoldOutlined,
-  SolutionOutlined, TeamOutlined,
+  DashboardOutlined, DownOutlined, HistoryOutlined, LockOutlined, LogoutOutlined, MenuFoldOutlined, MenuOutlined, MenuUnfoldOutlined,
+  SolutionOutlined, TeamOutlined, UserOutlined,
 } from '@ant-design/icons'
-import { Avatar, Badge, Button, Drawer, Dropdown, Grid, Layout, Menu, Result, Skeleton, Tag, Tooltip } from 'antd'
+import { Badge, Button, Drawer, Dropdown, Grid, Layout, Menu, Result, Skeleton, Tooltip, type MenuProps } from 'antd'
 import { Suspense, useEffect, useState, type ReactNode } from 'react'
 import { Link, Navigate, Outlet, useLocation, useNavigate } from 'react-router'
 import { post } from '../api'
@@ -11,22 +11,41 @@ import { prefetchPages } from '../routes'
 import { hasRole, useAuth } from '../session'
 import type { Role } from '../types'
 import Logo from './Logo'
+import UserAvatar from './UserAvatar'
 
 const COLLAPSED_KEY = 'sider-collapsed'
 
 // tip: 侧边栏悬浮提示 (页面不再显示标题)
-const NAV: { key: string; icon: ReactNode; label: string; tip: string; roles?: Role[] }[] = [
-  { key: '/', icon: <HomeOutlined />, label: '首页', tip: '首页：本月概况、近期拜访和待跟进事项' },
-  { key: '/visits', icon: <SolutionOutlined />, label: '拜访记录', tip: '客户拜访记录：填写和查询每次拜访' },
-  { key: '/trips', icon: <CarOutlined />, label: '出差报告', tip: '出差报告：行程、费用和出差期间的拜访' },
-  { key: '/weekly', icon: <FileTextOutlined />, label: '周报', tip: '销售周报：每周工作总结与下周计划' },
-  { key: '/monthly', icon: <CalendarOutlined />, label: '月度报告', tip: '月度出差报告：每月结束后自动生成上月统计与分析' },
-  { key: '/customers', icon: <ContactsOutlined />, label: '客户名单', tip: '客户名单：客户资料、联系人和拜访历史' },
-  { key: '/stats', icon: <BarChartOutlined />, label: '统计分析', tip: '统计分析：按销售员、客户、类型汇总，可导出 Excel' },
-  { key: '/approvals', icon: <AuditOutlined />, label: '待审批', tip: '待我审批：出差报告、周报和月度报告', roles: ['manager', 'admin'] },
-  { key: '/users', icon: <TeamOutlined />, label: '账号管理', tip: '账号管理：开户、角色和离职交接', roles: ['admin'] },
-  { key: '/logs', icon: <HistoryOutlined />, label: '操作日志', tip: '操作日志：最近 300 条操作记录', roles: ['admin'] },
+const NAV: { key: string; icon: ReactNode; label: string; tip: string; group: string; roles?: Role[] }[] = [
+  { key: '/', icon: <DashboardOutlined />, label: '首页', group: '工作台', tip: '首页：本月概况、近期拜访和待跟进事项' },
+  { key: '/visits', icon: <SolutionOutlined />, label: '拜访记录', group: '业务', tip: '客户拜访记录：填写和查询每次拜访' },
+  { key: '/trips', icon: <CarOutlined />, label: '出差报告', group: '业务', tip: '出差报告：行程、费用和出差期间的拜访' },
+  { key: '/weekly', icon: <FileTextOutlined />, label: '周报', group: '业务', tip: '销售周报：每周工作总结与下周计划' },
+  { key: '/monthly', icon: <CalendarOutlined />, label: '月度报告', group: '业务', tip: '月度出差报告：每月结束后自动生成上月统计与分析' },
+  { key: '/customers', icon: <ContactsOutlined />, label: '客户名单', group: '业务', tip: '客户名单：客户资料、联系人和拜访历史' },
+  { key: '/stats', icon: <BarChartOutlined />, label: '统计分析', group: '分析', tip: '统计分析：按销售员、客户、类型汇总，可导出 Excel' },
+  { key: '/approvals', icon: <AuditOutlined />, label: '待审批', group: '管理', tip: '待我审批：出差报告、周报和月度报告', roles: ['manager', 'admin'] },
+  { key: '/users', icon: <TeamOutlined />, label: '账号管理', group: '管理', tip: '账号管理：开户、角色和离职交接', roles: ['admin'] },
+  { key: '/logs', icon: <HistoryOutlined />, label: '操作日志', group: '管理', tip: '操作日志：最近 300 条操作记录', roles: ['admin'] },
 ]
+
+type NavItem = (typeof NAV)[number]
+
+/** 菜单按「工作台 / 业务 / 分析 / 管理」分组; 收起时分组标题放不下, 改用分隔线 */
+function groupNav<T>(items: NavItem[], mini: boolean, render: (n: NavItem) => T) {
+  const out: unknown[] = []
+  let current = ''
+  for (const n of items) {
+    if (n.group !== current) {
+      current = n.group
+      if (!mini) out.push({ type: 'group', key: `g-${n.group}`, label: n.group, children: [] })
+      else if (out.length) out.push({ type: 'divider', key: `d-${n.group}` })
+    }
+    if (mini) out.push(render(n))
+    else (out[out.length - 1] as { children: T[] }).children.push(render(n))
+  }
+  return out as MenuProps['items']
+}
 
 export default function AppLayout() {
   const { session, refresh } = useAuth()
@@ -61,7 +80,7 @@ export default function AppLayout() {
         setDrawer(false)
         if (key !== loc.pathname) navigate(key)
       }}
-      items={NAV.filter((n) => hasRole(user.role, n.roles)).map((n) => {
+      items={groupNav(NAV.filter((n) => hasRole(user.role, n.roles)), mini, (n) => {
         const tip = locked ? '请先修改密码' : n.tip
         const badge = n.key === '/approvals' && session.pending_count > 0
         const label = (
@@ -125,17 +144,24 @@ export default function AppLayout() {
           {mobile && <Button type="text" icon={<MenuOutlined />} onClick={() => setDrawer(true)} aria-label="菜单" />}
           {mobile && <span className="app-brand-mini"><Logo size={24} />销售拜访管理</span>}
           <div className="header-right">
-            <Dropdown trigger={['click']} menu={{
+            <Dropdown trigger={['click']} placement="bottomRight" menu={{
+              className: 'user-menu',
               items: [
+                { key: 'profile', icon: <UserOutlined />, label: '个人中心', disabled: locked, onClick: () => navigate('/profile') },
                 { key: 'pw', icon: <LockOutlined />, label: '修改密码', onClick: () => navigate('/password') },
                 { type: 'divider' },
                 { key: 'logout', icon: <LogoutOutlined />, label: '退出登录', danger: true, onClick: logout },
               ],
             }}>
-              <button type="button" className="user-chip">
-                <Avatar size={32} className="user-avatar">{user.name.slice(0, 1)}</Avatar>
-                <span className="user-name">{user.name}</span>
-                {!mobile && <Tag variant="filled" color="blue">{session.roles[user.role]}</Tag>}
+              <button type="button" className="user-chip" aria-label="个人菜单">
+                <UserAvatar user={user} size={34} />
+                {!mobile && (
+                  <span className="user-meta">
+                    <span className="user-name">{user.name}</span>
+                    <span className="user-role">{session.roles[user.role]}</span>
+                  </span>
+                )}
+                <DownOutlined className="user-caret" />
               </button>
             </Dropdown>
           </div>

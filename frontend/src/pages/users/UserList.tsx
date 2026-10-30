@@ -18,7 +18,7 @@ export default function UserList() {
       <FilterCard total={state.data?.rows.length}
         toolbar={
           <>
-            <Button type="primary" icon={<PlusOutlined />} onClick={() => setEdit({})}>新增账号</Button>
+            <Button color="primary" variant="filled" icon={<PlusOutlined />} onClick={() => setEdit({})}>新增账号</Button>
             <span className="hint">员工离职请「停用」账号而非删除，以保留其历史拜访数据；其负责客户可在编辑账号时改派。</span>
           </>
         } />

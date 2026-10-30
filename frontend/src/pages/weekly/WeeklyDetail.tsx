@@ -34,7 +34,7 @@ export default function WeeklyDetail() {
                   {d.mine && ['draft', 'rejected'].includes(w.status) && (
                     <>
                       <Button onClick={() => setOpen(true)}>修改</Button>
-                      <Button type="primary" loading={loading} onClick={submit}>提交</Button>
+                      <Button color="primary" variant="filled" loading={loading} onClick={submit}>提交</Button>
                     </>
                   )}
                   <Button icon={<PrinterOutlined />} onClick={() => window.print()}>打印</Button>

@@ -43,7 +43,7 @@ export default function TripDetail() {
                 <Space wrap className="no-print">
                   {editable && (
                     <>
-                      <Button type="primary" icon={<PlusOutlined />} onClick={() => setDialog('visit')}>添加拜访记录</Button>
+                      <Button color="primary" variant="filled" icon={<PlusOutlined />} onClick={() => setDialog('visit')}>添加拜访记录</Button>
                       <Button onClick={() => setDialog('trip')}>修改</Button>
                       <Button loading={loading} onClick={submit}>提交审批</Button>
                       <Popconfirm title="确定删除该出差报告？" description="其中的拜访记录会保留" onConfirm={remove}>

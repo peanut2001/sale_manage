@@ -15,7 +15,7 @@ import threading
 import time
 from collections import Counter, defaultdict
 from datetime import date, datetime, timedelta
-from functools import wraps
+from functools import lru_cache, wraps
 
 from flask import Flask, abort, g, jsonify, request, send_file, send_from_directory, session
 from werkzeug.exceptions import HTTPException
@@ -160,7 +160,7 @@ def load_user():
         if not token or token != session.get("_csrf"):
             abort(400, "页面已过期，请刷新页面后重试")
     if g.user and g.user["must_change_pw"] and request.endpoint not in (
-            "session_info", "change_password", "logout", "spa"):
+            "session_info", "change_password", "logout", "spa", "avatar"):
         return fail("首次登录或密码被重置，请先修改密码", status=403, code="must_change_pw")
 
 
@@ -313,7 +313,9 @@ def owner_options():
 
 
 def user_brief(u):
-    return {k: u[k] for k in ("id", "username", "name", "role", "must_change_pw")}
+    av = q("SELECT updated_at FROM avatars WHERE user_id=?", (u["id"],), one=True)
+    return {**{k: u[k] for k in ("id", "username", "name", "role", "must_change_pw")},
+            "avatar": av["updated_at"] if av else None}
 
 
 # ---------------------------------------------------------------- 登录 / 会话
@@ -372,6 +374,67 @@ def change_password():
     return ok("密码已修改")
 
 
+# ---------------------------------------------------------------- 个人中心
+
+AVATAR_MAX = 200 * 1024
+
+
+@app.route("/api/profile")
+@login_required
+def profile():
+    u = q("SELECT u.username, u.name, u.role, u.region, u.phone, u.created_at, m.name manager_name "
+          "FROM users u LEFT JOIN users m ON m.id=u.manager_id WHERE u.id=?", (g.user["id"],), one=True)
+    return jsonify(dict(u))
+
+
+@app.route("/api/profile", methods=["PUT"])
+@login_required
+def profile_save():
+    """本人只能修改手机号; 姓名、地区、角色等由管理员在账号管理中维护"""
+    phone = f_str("phone")
+    if len(phone) > 20 or any(c not in "0123456789+- " for c in phone):
+        return fail("手机号只能包含数字、空格、+ 和 -，最多 20 位")
+    execute("UPDATE users SET phone=? WHERE id=?", (phone, g.user["id"]))
+    audit("修改个人信息")
+    return ok("手机号已保存")
+
+
+@app.route("/api/profile/avatar", methods=["POST"])
+@login_required
+def avatar_upload():
+    file = request.files.get("file")
+    data = file.read(AVATAR_MAX + 1) if file else b""
+    if not data.startswith(b"\xff\xd8\xff"):  # JPEG 文件头
+        return fail("请上传 JPG 格式的头像图片")
+    if len(data) > AVATAR_MAX:
+        return fail("头像图片不能超过 200KB")
+    ver = datetime.now().isoformat(timespec="milliseconds")
+    execute("INSERT OR REPLACE INTO avatars (user_id, data, updated_at) VALUES (?,?,?)", (g.user["id"], data, ver))
+    audit("更换头像")
+    return ok("头像已更新", avatar=ver)
+
+
+@app.route("/api/profile/avatar", methods=["DELETE"])
+@login_required
+def avatar_delete():
+    execute("DELETE FROM avatars WHERE user_id=?", (g.user["id"],))
+    audit("移除头像")
+    return ok("头像已移除")
+
+
+@app.route("/api/avatar/<int:uid>")
+@login_required
+def avatar(uid):
+    a = q("SELECT data, updated_at FROM avatars WHERE user_id=?", (uid,), one=True)
+    if not a:
+        abort(404)
+    resp = send_file(io.BytesIO(a["data"]), mimetype="image/jpeg")
+    # 前端地址带版本号 (?v=更新时间), 换头像后地址随之变化, 可以长期缓存
+    fresh = request.args.get("v") == a["updated_at"]
+    resp.headers["Cache-Control"] = "private, max-age=31536000, immutable" if fresh else "no-cache"
+    return resp
+
+
 @app.route("/api/options")
 @login_required
 def options():
@@ -381,6 +444,52 @@ def options():
 
 # ---------------------------------------------------------------- 首页
 
+_CITIES = None
+
+
+def city_table():
+    """城市/省份坐标表 (geo/cities.json, 由 DataV.GeoAtlas 数据整理); 自治州补充前两字简称"""
+    global _CITIES
+    if _CITIES is None:
+        with open(os.path.join(BASE_DIR, "geo", "cities.json"), encoding="utf-8") as f:
+            rows = json.load(f)
+        pshorts = {c["pshort"] for c in rows}
+        for c in rows:
+            keys = {c["name"], c["short"]}
+            if c["name"].endswith("自治州") and c["name"][:2] not in pshorts:
+                keys.add(c["name"][:2])  # 恩施土家族苗族自治州 -> 恩施
+            c["keys"] = [k for k in keys if len(k) >= 2]
+        _CITIES = rows
+    return _CITIES
+
+
+@lru_cache(maxsize=4096)
+def resolve_city(region):
+    """把客户「地区」(如 江苏苏州 / 苏州市吴中区 / 吉林长春) 解析为城市坐标;
+    只填了省份的落到省中心; 无法识别返回 None"""
+    s = (region or "").replace(" ", "")
+    if not s:
+        return None
+    best = None
+    for c in city_table():
+        if c["level"] != "city":
+            continue
+        for k in c["keys"]:
+            i = s.find(k)
+            if i >= 0:
+                # 优先: 文本里提到了该城市所在省 > 出现位置靠后 (更具体) > 名称更长
+                rank = (c["pshort"] in s, i + len(k), len(k))
+                if best is None or rank > best[0]:
+                    best = (rank, c)
+    if best is None:
+        prov = [c for c in city_table() if c["level"] == "province" and c["pshort"] in s]
+        best = (None, prov[0]) if prov else None
+    if best is None:
+        return None
+    c = best[1]
+    return {"name": c["name"], "lng": c["lng"], "lat": c["lat"]}
+
+
 @app.route("/api/dashboard")
 @login_required
 def dashboard():
@@ -388,13 +497,83 @@ def dashboard():
     month = today.strftime("%Y-%m")
     first, last = month_range(month)
     sql, args = scope("v.user_id")
-    month_visits = q(f"SELECT COUNT(*) c, COUNT(DISTINCT customer_id) cc FROM visits v "
-                     f"WHERE visit_date BETWEEN ? AND ? {sql}",
-                     [first.isoformat(), last.isoformat()] + args, one=True)
     tsql, targs = scope("t.user_id")
-    month_trips = q(f"SELECT COUNT(*) c, COALESCE(SUM(cost_transport+cost_hotel+cost_meal+cost_other),0) cost "
-                    f"FROM trips t WHERE start_date <= ? AND end_date >= ? {tsql}",
-                    [last.isoformat(), first.isoformat()] + targs, one=True)
+
+    def visit_stat(f, l):
+        return dict(q(f"SELECT COUNT(*) c, COUNT(DISTINCT customer_id) cc FROM visits v "
+                      f"WHERE visit_date BETWEEN ? AND ? {sql}", [f.isoformat(), l.isoformat()] + args, one=True))
+
+    def trip_stat(f, l):
+        return dict(q(f"SELECT COUNT(*) c, COALESCE(SUM(cost_transport+cost_hotel+cost_meal+cost_other),0) cost "
+                      f"FROM trips t WHERE start_date <= ? AND end_date >= ? {tsql}",
+                      [l.isoformat(), f.isoformat()] + targs, one=True))
+
+    month_visits, month_trips = visit_stat(first, last), trip_stat(first, last)
+    # 上月同期: 上月 1 日 ~ 上月同一天 (上月没有这一天时取上月末)
+    pm_last = first - timedelta(days=1)
+    pm_first = pm_last.replace(day=1)
+    pm_end = pm_first.replace(day=min(today.day, pm_last.day))
+    prev = {"visits": visit_stat(pm_first, pm_end), "trips": trip_stat(pm_first, pm_end)}
+
+    # 近 30 天每日拜访
+    start = today - timedelta(days=29)
+    daily = {r["visit_date"]: r for r in q(
+        f"SELECT visit_date, COUNT(*) n, SUM(visit_type='首次拜访') nf FROM visits v "
+        f"WHERE visit_date BETWEEN ? AND ? {sql} GROUP BY visit_date", [start.isoformat(), today.isoformat()] + args)}
+    trend = []
+    for i in range(30):
+        d = (start + timedelta(days=i)).isoformat()
+        trend.append({"date": d, "visits": daily[d]["n"] if d in daily else 0, "first": daily[d]["nf"] if d in daily else 0})
+
+    # 业绩 (拜访次数 + 预计商机金额): 主管看本月团队排行, 销售员看自己近 6 个月
+    if is_manager():
+        rows = q(f"SELECT u.name label, COUNT(*) visits, COALESCE(SUM(v.amount),0) amount FROM visits v "
+                 f"JOIN users u ON u.id=v.user_id WHERE visit_date BETWEEN ? AND ? {sql} "
+                 f"GROUP BY u.id ORDER BY visits DESC, amount DESC LIMIT 10", [first.isoformat(), last.isoformat()] + args)
+        performance = {"mode": "team", "rows": dicts(rows)}
+    else:
+        months = [month]
+        for _ in range(5):
+            months.insert(0, prev_month(months[0]))
+        got = {r["m"]: r for r in q(
+            "SELECT substr(visit_date,1,7) m, COUNT(*) visits, COALESCE(SUM(amount),0) amount FROM visits "
+            "WHERE user_id=? AND visit_date >= ? GROUP BY m", (g.user["id"], months[0] + "-01"))}
+        performance = {"mode": "months", "rows": [
+            {"label": m, "visits": got[m]["visits"] if m in got else 0, "amount": got[m]["amount"] if m in got else 0}
+            for m in months]}
+
+    # 客户分布: 按「地区」解析到城市 (销售员看自己负责的, 主管看本组, 管理员看全部)
+    csql, cargs = scope("c.owner_id")
+    spots, unlocated, total = {}, 0, 0
+    for r in q(f"SELECT c.region FROM customers c WHERE c.status='active' {csql}", cargs):
+        total += 1
+        city = resolve_city(r["region"])
+        if not city:
+            unlocated += 1
+            continue
+        spot = spots.setdefault(city["name"], dict(city, count=0))
+        spot["count"] += 1
+    customer_map = {"spots": sorted(spots.values(), key=lambda x: -x["count"]), "unlocated": unlocated, "total": total}
+
+    # 外勤轨迹: 近 30 天按拜访先后把去过的城市连起来 (连续在同一城市的拜访合并为一站)
+    tracks = {}
+    for r in q(f"SELECT v.user_id, u.name, v.visit_date, c.name customer, c.region FROM visits v "
+               f"JOIN customers c ON c.id=v.customer_id JOIN users u ON u.id=v.user_id "
+               f"WHERE visit_date BETWEEN ? AND ? {sql} ORDER BY v.user_id, visit_date, start_time, v.id",
+               [start.isoformat(), today.isoformat()] + args):
+        t = tracks.setdefault(r["user_id"], {"user_id": r["user_id"], "name": r["name"], "stops": [], "visits": 0, "unlocated": 0})
+        t["visits"] += 1
+        city = resolve_city(r["region"])
+        if not city:
+            t["unlocated"] += 1
+            continue
+        stops = t["stops"]
+        if stops and stops[-1]["name"] == city["name"]:
+            stops[-1].update(end=r["visit_date"], visits=stops[-1]["visits"] + 1)
+        else:
+            stops.append(dict(city, start=r["visit_date"], end=r["visit_date"], visits=1))
+    tracks = sorted(tracks.values(), key=lambda t: -t["visits"])
+
     recent = q(f"SELECT v.*, c.name customer, u.name sales FROM visits v "
                f"JOIN customers c ON c.id=v.customer_id JOIN users u ON u.id=v.user_id "
                f"WHERE 1=1 {sql} ORDER BY visit_date DESC, v.id DESC LIMIT 8", args)
@@ -409,7 +588,8 @@ def dashboard():
                  (g.user["id"],) * 3)
     rejected = [{"type": r["t"], "id": r["id"], "label": TARGETS[r["t"]][1], "d": r["d"], "title": r["title"]}
                 for r in rejected]
-    return jsonify(month=month, visits=dict(month_visits), trips=dict(month_trips),
+    return jsonify(month=month, visits=month_visits, trips=month_trips, prev=prev, trend=trend,
+                   performance=performance, customer_map=customer_map, tracks=tracks,
                    recent=dicts(recent), followups=dicts(followups), rejected=rejected)
 
 

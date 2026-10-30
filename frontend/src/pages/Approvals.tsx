@@ -28,7 +28,7 @@ export default function Approvals() {
                 { title: '内容', dataIndex: 'title' },
                 {
                   title: '', key: 'go', align: 'right',
-                  render: (_, r) => <Button type="primary" size="small" onClick={() => navigate(targetUrl[r.type] + r.id)}>去审批</Button>,
+                  render: (_, r) => <Button color="primary" variant="filled" size="small" onClick={() => navigate(targetUrl[r.type] + r.id)}>去审批</Button>,
                 },
               ]} />
           </Card>

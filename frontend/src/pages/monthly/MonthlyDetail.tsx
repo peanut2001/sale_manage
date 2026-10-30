@@ -133,7 +133,7 @@ function MonthlyBody({ data: d, reload }: { data: Data; reload: () => void }) {
             <div className="form-actions no-print">
               <Button loading={loading} onClick={() => act('save')}>保存</Button>
               <Button loading={loading} onClick={() => act('refresh')}>刷新统计数据</Button>
-              <Button type="primary" loading={loading}
+              <Button color="primary" variant="filled" loading={loading}
                 onClick={() => modal.confirm({ title: '提交审批', content: '提交后不能修改，确定提交审批？', onOk: () => act('submit') })}>
                 提交审批
               </Button>

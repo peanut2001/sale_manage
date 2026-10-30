@@ -95,19 +95,40 @@ body {
 .user-chip {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   padding: 4px 10px 4px 4px;
   font: inherit;
   background: none;
   border: 0;
-  border-radius: 24px;
+  border-radius: 12px;
   cursor: pointer;
+  transition: background 0.2s;
 }
-.user-chip:hover {
+.user-chip:hover,
+.user-chip.ant-dropdown-open {
   background: #f3f6fb;
 }
-.user-chip .ant-tag {
-  margin: 0;
+.user-meta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  line-height: 1.3;
+}
+.user-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1f2937;
+}
+.user-role {
+  font-size: 12px;
+  color: #8a8f99;
+}
+.user-caret {
+  font-size: 10px;
+  color: #9aa3b2;
+}
+.user-menu {
+  min-width: 160px;
 }
 .user-avatar.ant-avatar {
   background: linear-gradient(135deg, #5aaeff, #2f6bff);
@@ -173,12 +194,33 @@ body {
   color: #111827;
 }
 
-/* 渐变主按钮 (取自设计图) */
-.ant-btn.ant-btn-color-primary.ant-btn-variant-solid:not(:disabled) {
-  background: linear-gradient(90deg, #2f6bff, #3d9bff);
+/* ---------- 个人中心 ---------- */
+.profile-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 16px 0 8px;
+  text-align: center;
 }
-.ant-btn.ant-btn-color-primary.ant-btn-variant-solid:not(:disabled):hover {
-  background: linear-gradient(90deg, #4a80ff, #5aaeff);
+.profile-name {
+  margin-top: 8px;
+  font-size: 20px;
+  font-weight: 600;
+  color: #111827;
+}
+.profile-actions {
+  justify-content: center;
+  margin-top: 12px;
+}
+.profile-note {
+  margin-top: 8px;
+}
+.profile-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
 }
 
 /* ---------- 指标卡 ---------- */
@@ -411,4 +453,187 @@ body {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* ---------- 首页 ---------- */
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+  margin-bottom: 16px;
+}
+.stat-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px 18px;
+  background: #fff;
+  border-radius: 14px;
+  box-shadow: 0 4px 20px rgba(31, 64, 128, 0.05);
+}
+.stat-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.stat-icon {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  font-size: 16px;
+  color: #2f6bff;
+  background: #eaf1ff;
+  border-radius: 10px;
+}
+.stat-label {
+  font-size: 13px;
+  color: #6b7280;
+}
+.stat-body {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 36px;
+}
+.stat-value {
+  font-size: 28px;
+  font-weight: 600;
+  line-height: 1.15;
+  color: #111827;
+}
+.sparkline {
+  flex: none;
+}
+.stat-foot {
+  min-height: 20px;
+  font-size: 12px;
+}
+.delta {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-weight: 500;
+}
+.delta.good {
+  color: #0a7d33;
+}
+.delta.bad {
+  color: #d03b3b;
+}
+.delta.flat {
+  font-weight: 400;
+  color: #8a8f99;
+}
+.delta-ref {
+  margin-left: 4px;
+  font-weight: 400;
+  color: #8a8f99;
+}
+.title-tip {
+  margin-left: 6px;
+  font-size: 13px;
+  color: #9aa3b2;
+  cursor: help;
+}
+.chart-box {
+  position: relative;
+}
+.chart-empty {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-size: 13px;
+  color: #8a8f99;
+  pointer-events: none;
+}
+.chart-loading {
+  display: grid;
+  place-items: center;
+  height: 320px;
+}
+.chart-foot {
+  margin-top: 8px;
+  font-size: 12px;
+  color: #6b7280;
+}
+.perf-panels {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+}
+.perf-title {
+  margin-bottom: 8px;
+  font-size: 12px;
+  color: #6b7280;
+}
+.app-content .ant-skeleton-node {
+  width: 100% !important;
+}
+
+/* ---------- 侧边栏 ---------- */
+.app-menu .ant-menu-item-group-title {
+  padding: 14px 14px 6px !important;
+  letter-spacing: 0.5px;
+}
+.app-menu .ant-menu-item {
+  position: relative;
+}
+.app-menu .ant-menu-item-selected {
+  font-weight: 600;
+}
+.app-menu .ant-menu-item-selected::before {
+  content: '';
+  position: absolute;
+  top: 11px;
+  bottom: 11px;
+  left: 0;
+  width: 3px;
+  background: #2f6bff;
+  border-radius: 0 3px 3px 0;
+}
+.app-menu .ant-menu-item-divider {
+  margin: 8px 12px !important;
+}
+.chart-empty span {
+  padding: 6px 14px;
+  background: rgba(255, 255, 255, 0.92);
+  border-radius: 999px;
+  box-shadow: 0 2px 10px rgba(31, 64, 128, 0.08);
+}
+.chart-foot-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  margin-top: 6px;
+  color: #4b5563;
+}
+.chart-foot-list b {
+  font-weight: 600;
+  color: #111827;
+}
+.route {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 6px;
+  margin-top: 6px;
+  color: #4b5563;
+}
+.route-no {
+  display: inline-grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  margin-right: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #fff;
+  background: #2f6bff;
+  border-radius: 50%;
+}
+.route-arrow {
+  color: #b6bdc9;
 }

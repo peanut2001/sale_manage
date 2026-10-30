@@ -23,6 +23,7 @@ RUN pip install --no-cache-dir -r requirements.txt \
     && mkdir -p /app/data && chown app:app /app/data
 
 COPY app.py serve.py schema.sql ./
+COPY geo ./geo
 COPY --from=web /web/dist ./frontend/dist
 
 USER app

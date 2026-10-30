@@ -40,7 +40,7 @@ export default function CustomerList() {
       <FilterCard filters={filters} total={state.data?.rows.length}
         toolbar={
           <>
-            <Button type="primary" icon={<PlusOutlined />} onClick={() => setOpen(true)}>
+            <Button color="primary" variant="filled" icon={<PlusOutlined />} onClick={() => setOpen(true)}>
               {isManager ? '新增客户' : '申请新增客户'}
             </Button>
             {isManager && (
@@ -83,7 +83,7 @@ export default function CustomerList() {
                   <StatusTag status={s} />
                   {s === 'pending' && isManager && (
                     <>
-                      <Button size="small" type="primary" onClick={() => review(c.id, true)}>通过</Button>
+                      <Button size="small" color="primary" variant="filled" onClick={() => review(c.id, true)}>通过</Button>
                       <Button size="small" danger onClick={() => review(c.id, false)}>驳回</Button>
                     </>
                   )}

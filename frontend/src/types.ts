@@ -8,6 +8,7 @@ export interface User {
   name: string
   role: Role
   must_change_pw: number
+  avatar: string | null // 头像版本号 (更新时间), 未上传为 null
 }
 
 export interface Session {

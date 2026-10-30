@@ -22,7 +22,7 @@ export default function TripList() {
   return (
     <>
       <FilterCard filters={filters} total={state.data?.rows.length}
-        toolbar={<Button type="primary" icon={<PlusOutlined />} onClick={() => setOpen(true)}>新建出差报告</Button>}>
+        toolbar={<Button color="primary" variant="filled" icon={<PlusOutlined />} onClick={() => setOpen(true)}>新建出差报告</Button>}>
         <FCol><Form.Item label="月份" name="month"><DatePicker picker="month" /></Form.Item></FCol>
         {isManager && (
           <FCol><Form.Item label="销售员" name="user_id">

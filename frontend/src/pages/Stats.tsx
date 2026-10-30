@@ -56,7 +56,7 @@ export default function Stats() {
       <FilterCard filters={filters} initial={{ start: today.startOf('month'), end: today, ...filters.initial }}
         toolbar={d && (
           <Tooltip title="按当前筛选条件导出明细和汇总">
-            <Button type="primary" icon={<DownloadOutlined />} href={`/api/stats/export${qs(d.filters)}`}>导出 Excel</Button>
+            <Button color="primary" variant="filled" icon={<DownloadOutlined />} href={`/api/stats/export${qs(d.filters)}`}>导出 Excel</Button>
           </Tooltip>
         )}>
         <FCol><Form.Item label="开始日期" name="start"><DatePicker /></Form.Item></FCol>

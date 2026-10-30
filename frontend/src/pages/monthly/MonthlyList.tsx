@@ -41,7 +41,7 @@ export default function MonthlyList() {
               disabledDate={(m) => m.format('YYYY-MM') > d.current}
               onChange={(m) => m && setSp({ month: m.format('YYYY-MM') })} />
             <Tooltip title="月中可生成当月预览；已提交或已审批的报告不会被覆盖">
-              <Button type="primary" icon={<ReloadOutlined />} loading={loading} onClick={generate}>
+              <Button color="primary" variant="filled" icon={<ReloadOutlined />} loading={loading} onClick={generate}>
                 {isManager ? '为团队' : ''}生成 / 刷新报告
               </Button>
             </Tooltip>

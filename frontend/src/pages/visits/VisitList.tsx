@@ -22,7 +22,7 @@ export default function VisitList() {
   return (
     <>
       <FilterCard filters={filters} total={state.data?.rows.length}
-        toolbar={<Button type="primary" icon={<PlusOutlined />} onClick={() => setOpen(true)}>填写拜访记录</Button>}>
+        toolbar={<Button color="primary" variant="filled" icon={<PlusOutlined />} onClick={() => setOpen(true)}>填写拜访记录</Button>}>
         <FCol><Form.Item label="开始日期" name="start"><DatePicker /></Form.Item></FCol>
         <FCol><Form.Item label="结束日期" name="end"><DatePicker /></Form.Item></FCol>
         {isManager && (

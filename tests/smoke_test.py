@@ -1,5 +1,6 @@
 """冒烟测试: python tests/smoke_test.py  (使用临时数据库, 不影响正式数据)"""
 import gzip
+import io
 import json
 import os
 import sys
@@ -173,6 +174,58 @@ if "Expires=" not in client("lixm", remember=True).login_cookie:
     fails.append("勾选记住我后 cookie 没有过期时间")
 if "Expires=" in client("lixm").login_cookie:
     fails.append("未勾选记住我时 cookie 不应带过期时间")
+
+# 个人中心: 本人只能改手机号 (传了姓名也不生效); 头像上传 / 读取 / 移除
+p = check(li, "/api/profile", who="lixm").json
+assert p["username"] == "lixm" and p["manager_name"] == "张经理", p
+send(li, "PUT", "/api/profile", {"phone": "138 0000-0000", "name": "改名"}, "lixm")
+with A.app.app_context():
+    u = A.q("SELECT name, phone FROM users WHERE id=?", (lid,), one=True)
+    assert u["phone"] == "138 0000-0000" and u["name"] == "李晓明", dict(u)
+send(li, "PUT", "/api/profile", {"phone": "abc"}, "手机号格式", 400)
+
+
+def upload_avatar(c, data):
+    return c.post("/api/profile/avatar", data={"file": (io.BytesIO(data), "a.jpg")}, headers={"X-CSRF-Token": c.token})
+
+
+jpg = b"\xff\xd8\xff\xe0" + b"0" * 100
+if upload_avatar(li, b"GIF89a" + b"0" * 100).status_code != 400:
+    fails.append("非 JPG 头像应被拒绝")
+if upload_avatar(li, jpg + b"0" * A.AVATAR_MAX).status_code != 400:
+    fails.append("超过 200KB 的头像应被拒绝")
+ver = upload_avatar(li, jpg).json.get("avatar")
+if not ver or li.get("/api/session").json["user"]["avatar"] != ver:
+    fails.append("头像上传后会话中没有版本号")
+r = mgr.get(f"/api/avatar/{lid}?v={ver}")  # 同事也能看到头像
+if r.status_code != 200 or r.data != jpg or "immutable" not in r.headers.get("Cache-Control", ""):
+    fails.append("带版本号的头像地址应返回图片并长期缓存")
+if mgr.get(f"/api/avatar/{lid}").headers.get("Cache-Control") != "no-cache":
+    fails.append("不带版本号的头像地址不应长期缓存")
+check(anon, f"/api/avatar/{lid}", 401, "anon")
+send(li, "DELETE", "/api/profile/avatar", who="lixm")
+check(li, f"/api/avatar/{lid}", 404, "lixm 已移除头像")
+if li.get("/api/session").json["user"]["avatar"] is not None:
+    fails.append("移除头像后会话中仍有版本号")
+
+# 首页图表数据: 30 天趋势 / 业绩 (主管看团队、销售员看近 6 个月) / 客户分布 / 外勤轨迹
+d = mgr.get("/api/dashboard").json
+assert len(d["trend"]) == 30 and d["trend"][-1]["date"] == A.date.today().isoformat()
+assert d["performance"]["mode"] == "team" and d["performance"]["rows"], d["performance"]
+cm = d["customer_map"]
+assert cm["spots"] and sum(s["count"] for s in cm["spots"]) + cm["unlocated"] == cm["total"], cm
+assert d["tracks"] and all("lng" in s and "lat" in s for t in d["tracks"] for s in t["stops"])
+assert "visits" in d["prev"] and "trips" in d["prev"]
+d = li.get("/api/dashboard").json
+assert d["performance"]["mode"] == "months" and len(d["performance"]["rows"]) == 6
+assert all(t["name"] == "李晓明" for t in d["tracks"]), "销售员只能看到自己的轨迹"
+for region, city in [("江苏苏州", "苏州市"), ("北京朝阳", "北京市"), ("吉林长春", "长春市"), ("湖北恩施", "恩施土家族苗族自治州"),
+                     ("海南", "海南省"), ("广东省深圳市南山区", "深圳市")]:
+    got = A.resolve_city(region)
+    if not got or got["name"] != city:
+        fails.append(f"地区解析 {region} -> {got and got['name']}, 应为 {city}")
+if A.resolve_city("华东区") is not None:
+    fails.append("无法识别的地区应返回 None")
 
 # 前端页面: 任意非接口路径返回 index.html, 构建产物按文件返回
 dist = tempfile.mkdtemp()

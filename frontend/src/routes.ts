@@ -3,6 +3,7 @@ export const pageLoaders = {
   Login: () => import('./pages/Login'),
   Dashboard: () => import('./pages/Dashboard'),
   Password: () => import('./pages/Password'),
+  Profile: () => import('./pages/Profile'),
   VisitList: () => import('./pages/visits/VisitList'),
   VisitDetail: () => import('./pages/visits/VisitDetail'),
   TripList: () => import('./pages/trips/TripList'),

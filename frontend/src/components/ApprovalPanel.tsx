@@ -59,7 +59,7 @@ export default function ApprovalPanel({ target, id, info, onDone }: {
           <Space wrap>
             {info.can_approve && (
               <>
-                <Button type="primary" loading={loading && decision === 'approved'}
+                <Button color="primary" variant="filled" loading={loading && decision === 'approved'}
                   onClick={() => submit('approved')}>审批通过</Button>
                 <Button danger loading={loading && decision === 'rejected'}
                   onClick={() => submit('rejected')}>退回修改</Button>

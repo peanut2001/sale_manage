@@ -14,6 +14,13 @@ CREATE TABLE IF NOT EXISTS users (
     created_at    TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
 );
 
+-- 用户头像 (浏览器端裁剪压缩为 256x256 JPEG 后上传)
+CREATE TABLE IF NOT EXISTS avatars (
+    user_id    INTEGER PRIMARY KEY REFERENCES users(id),
+    data       BLOB NOT NULL,
+    updated_at TEXT NOT NULL                          -- 精确到毫秒, 兼作图片缓存版本号
+);
+
 CREATE TABLE IF NOT EXISTS customers (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
     name        TEXT NOT NULL UNIQUE,

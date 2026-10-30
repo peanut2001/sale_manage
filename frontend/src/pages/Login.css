@@ -180,6 +180,14 @@
   font-size: 17px;
   letter-spacing: 2px;
   border-radius: 10px;
+  box-shadow: 0 6px 16px rgba(47, 107, 255, 0.24);
+}
+/* 登录按钮保留设计图的渐变 (其他页面的按钮用纯色/浅色) */
+.login-btn.ant-btn-variant-solid:not(:disabled) {
+  background: linear-gradient(90deg, #2f6bff, #3d9bff);
+}
+.login-btn.ant-btn-variant-solid:not(:disabled):hover {
+  background: linear-gradient(90deg, #4a80ff, #5aaeff);
 }
 .login-footer {
   margin-top: 40px;
